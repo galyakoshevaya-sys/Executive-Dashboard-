@@ -1,0 +1,1402 @@
+<title>Dashboard керівника</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #ffffff;
+    --page-plane:     #f5f5f5;
+    --text-primary:   #161616;
+    --text-secondary: #55585c;
+    --text-muted:     #8a8d91;
+    --gridline:       #e6e6e6;
+    --baseline:       #cfcfcf;
+    --border:         rgba(0,0,0,0.08);
+    --brand-green:    #2ABD13;
+    --brand-green-ink:#187a0b;
+    --brand-orange:   #FC5E0F;
+    --series-1: #2a78d6; --series-2: #1baf7a; --series-3: #eda100; --series-4: #008300;
+    --series-5: #4a3aa7; --series-6: #e34948; --series-7: #e87ba4; --series-8: #eb6834;
+    --series-other: #b9b8b2; --series-minor: #d6d5cf;
+    --status-good: #0ca30c; --status-warning: #d98c00; --status-critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1c1c1c;
+      --page-plane:     #101010;
+      --text-primary:   #ffffff;
+      --text-secondary: #c7c7c7;
+      --text-muted:     #93938e;
+      --gridline:       #303030;
+      --baseline:       #3a3a3a;
+      --border:         rgba(255,255,255,0.10);
+      --brand-green:    #34d419;
+      --brand-green-ink:#5be745;
+      --brand-orange:   #ff7833;
+      --series-1: #3987e5; --series-2: #199e70; --series-3: #c98500; --series-4: #2fa32f;
+      --series-5: #9085e9; --series-6: #e66767; --series-7: #d55181; --series-8: #d95926;
+      --series-other: #55554f; --series-minor: #3f3f3a;
+      --status-good: #0ca30c; --status-warning: #fab219; --status-critical: #e66767;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1c1c1c;
+    --page-plane:     #101010;
+    --text-primary:   #ffffff;
+    --text-secondary: #c7c7c7;
+    --text-muted:     #93938e;
+    --gridline:       #303030;
+    --baseline:       #3a3a3a;
+    --border:         rgba(255,255,255,0.10);
+    --brand-green:    #34d419;
+    --brand-green-ink:#5be745;
+    --brand-orange:   #ff7833;
+    --series-1: #3987e5; --series-2: #199e70; --series-3: #c98500; --series-4: #2fa32f;
+    --series-5: #9085e9; --series-6: #e66767; --series-7: #d55181; --series-8: #d95926;
+    --series-other: #55554f; --series-minor: #3f3f3a;
+    --status-good: #0ca30c; --status-warning: #fab219; --status-critical: #e66767;
+  }
+
+  .viz-root {
+    font-family: Montserrat, Arial, -apple-system, sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+    padding: 24px 20px 60px;
+    box-sizing: border-box;
+  }
+  .viz-root * { box-sizing: border-box; }
+  .wrap { max-width: 1220px; margin: 0 auto; }
+  .viz-root h1, .viz-root h2 { font-family: "Arial Black", Arial, sans-serif; }
+
+  header.page-head { margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  header.page-head .brand-mark { display: flex; align-items: center; gap: 10px; }
+  header.page-head .brand-dot { width: 14px; height: 14px; border-radius: 4px; background: linear-gradient(135deg, var(--brand-green), var(--brand-orange)); flex-shrink: 0; }
+  header.page-head h1 { font-size: 22px; font-weight: 900; margin: 0 0 4px; }
+  header.page-head p { margin: 0; color: var(--text-secondary); font-size: 13.5px; }
+
+  .tabs { display: flex; gap: 4px; margin: 20px 0 18px; border-bottom: 1px solid var(--gridline); }
+  .tab-btn {
+    appearance: none; border: none; background: none; cursor: pointer;
+    font: inherit; font-size: 14px; font-weight: 700; color: var(--text-secondary);
+    padding: 10px 16px; border-bottom: 3px solid transparent; margin-bottom: -1px;
+  }
+  .tab-btn.active { color: var(--text-primary); border-bottom-color: var(--brand-green); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi-tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; border-top: 3px solid var(--brand-green);
+  }
+  .kpi-tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .kpi-tile .value { font-size: 24px; font-weight: 900; font-family: "Arial Black", Arial, sans-serif; }
+  .kpi-tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; font-weight: 900; margin: 0 0 2px; }
+  .card .card-sub { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+  .card-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .year-select {
+    font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text-primary);
+    background: var(--page-plane); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; cursor: pointer;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; }
+  .people-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+  .chart-scroll { overflow-x: auto; }
+  svg text { fill: var(--text-secondary); font-size: 10px; }
+  .axis-line { stroke: var(--baseline); stroke-width: 1; }
+  .grid-line { stroke: var(--gridline); stroke-width: 1; }
+  .legend { display: flex; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+  .bar-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+  .bar-row .name { width: 270px; flex-shrink: 0; font-size: 12.5px; color: var(--text-primary); text-align: right; padding-right: 4px; }
+  .bar-track { flex: 1; background: var(--gridline); border-radius: 3px; height: 16px; position: relative; }
+  .bar-fill { height: 100%; border-radius: 3px; min-width: 3px; }
+  .bar-fill.dashed { background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.08) 4px, rgba(0,0,0,0.08) 8px); }
+  .bar-val { font-size: 12px; color: var(--text-secondary); width: 90px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; padding: 6px 9px; border-radius: 6px; white-space: nowrap; opacity: 0; transition: opacity .1s;
+    z-index: 10; transform: translate(-50%, -110%);
+  }
+  .chart-wrap { position: relative; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table th, table.data-table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--gridline); }
+  table.data-table th { color: var(--text-secondary); font-weight: 700; font-size: 12px; }
+  table.data-table td.num, table.data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .note {
+    background: var(--page-plane); border: 1px dashed var(--baseline); border-radius: 8px;
+    padding: 12px 14px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.55;
+  }
+  .note b { color: var(--text-primary); }
+  .kw-list { margin: 8px 0 0; padding-left: 18px; }
+  .kw-list li { margin-bottom: 3px; }
+
+  .placeholder-card { text-align: left; padding: 28px 24px; }
+  .placeholder-card h2 { font-size: 16px; margin-bottom: 8px; }
+  .checklist { list-style: none; margin: 14px 0 0; padding: 0; }
+  .checklist li { display: flex; gap: 10px; padding: 6px 0; font-size: 13.5px; color: var(--text-secondary); }
+  .checklist li::before { content: "○"; color: var(--text-muted); }
+
+  .dropzone {
+    border: 2px dashed var(--baseline); border-radius: 10px; padding: 16px 18px;
+    text-align: center; cursor: pointer; margin-bottom: 8px; background: var(--surface-1);
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag-over { border-color: var(--brand-green); background: rgba(42,189,19,0.06); }
+  .dropzone .dz-title { font-weight: 700; font-size: 13.5px; margin-bottom: 3px; }
+  .dropzone .dz-sub { font-size: 12px; color: var(--text-secondary); }
+  .upload-status { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 16px; min-height: 16px; }
+  .upload-status.upload-ok { color: var(--brand-green-ink); font-weight: 600; }
+  .upload-status.upload-error { color: var(--status-critical); font-weight: 600; }
+
+  .person-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 14px; background: var(--page-plane); }
+  .person-card .p-name { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; min-height: 32px; }
+  .person-card .p-stats { font-size: 11.5px; color: var(--text-secondary); margin-top: 8px; line-height: 1.6; }
+  .person-card .p-stats b { color: var(--text-primary); }
+  .delta-up { color: var(--brand-green-ink); font-weight: 700; }
+  .delta-down { color: var(--text-secondary); font-weight: 700; }
+  .badge-best { display: inline-block; background: rgba(252,94,15,0.12); color: var(--brand-orange); border-radius: 5px; padding: 1px 6px; font-weight: 700; }
+
+  .load-row { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 10px; }
+  .load-chip { flex: 0 0 auto; min-width: 30px; text-align: center; border-radius: 4px; padding: 3px 4px 4px; font-size: 9.5px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; cursor: default; }
+  .load-legend { font-size: 10.5px; color: var(--text-muted); margin-top: 6px; }
+  .load-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+  .no-load-calc { font-size: 10.5px; color: var(--text-muted); font-style: italic; margin-top: 10px; }
+
+  .insights-list { list-style: none; margin: 0; padding: 0; }
+  .insights-list li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--gridline); font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
+  .insights-list li:last-child { border-bottom: none; }
+  .insights-list .idx { flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; background: var(--brand-green); color: #fff; font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+  .insights-list b { color: var(--text-primary); }
+  .insights-list .tag { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
+  .tag-watch { background: rgba(252,94,15,0.14); color: var(--brand-orange); }
+  .tag-good { background: rgba(42,189,19,0.14); color: var(--brand-green-ink); }
+  .tag-idea { background: rgba(0,0,0,0.06); color: var(--text-secondary); }
+
+  @media (max-width: 900px) {
+    .people-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 780px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+    .people-grid { grid-template-columns: 1fr; }
+    .bar-row .name { width: 140px; font-size: 11.5px; }
+  }
+</style>
+
+<div class="viz-root">
+<div class="wrap">
+
+  <header class="page-head">
+    <div class="brand-mark">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>Dashboard керівника</h1>
+        <p>Джерело: Planner — «DESIGN & SUPPORT» · експорт 19.07.2026 · період даних 18.01.2026–17.07.2026</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="t1">Аналітика DESIGN & SUPPORT</button>
+    <button class="tab-btn" data-tab="t3">Аналітика UX/UI</button>
+    <button class="tab-btn" data-tab="t2">Успішність проєктів</button>
+  </div>
+
+  <!-- TAB 1 -->
+  <div class="tab-panel active" id="t1">
+
+    <div class="dropzone" id="dropzoneDesign">
+      <div class="dz-title">📂 Оновити дані DESIGN &amp; SUPPORT</div>
+      <div class="dz-sub">Перетягніть Planner-експорт(и) (.xlsx) сюди або натисніть, щоб обрати — можна кілька файлів одразу. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
+      <input type="file" id="fileInputDesign" accept=".xlsx" multiple hidden>
+    </div>
+    <div class="upload-status" id="uploadStatusDesign"></div>
+
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <h2>Задачі за місяць</h2>
+        <select class="year-select" id="yearSelectDesignSum"></select>
+      </div>
+      <p class="card-sub">Створено + завершено (сумарно) · перший і останній місяць обраного року можуть бути неповними</p>
+      <div class="chart-scroll">
+        <div class="chart-wrap" id="sumChartWrap"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Стадії активних задач</h2>
+      <p class="card-sub">На чому зараз стоять 62 активні задачі (без «Завершено»)</p>
+      <div id="stageChart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <h2>Завантаженість дизайнерів по місяцях</h2>
+        <select class="year-select" id="yearSelectDesignWorkload"></select>
+      </div>
+      <p class="card-sub">Всі задачі співробітника за місяць (створення), включно із завершеними · порівняння з попереднім місяцем і найуспішніший місяць за обраний рік</p>
+      <div class="people-grid" id="peopleGridDesigners"></div>
+      <p class="card-sub" style="margin:12px 0 0">* Останній місяць обраного року може бути неповним (якщо це поточний місяць) — дельта й проєкція розраховані з урахуванням цього.</p>
+      <p class="card-sub" style="margin:4px 0 0">% завантаженості: 8 робочих год/день, 2 год на задачу, робочі дні місяця (пн–пт), без урахування свят.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <h2>Завантаженість адміністраторів по місяцях</h2>
+        <select class="year-select" id="yearSelectDesignAdmins"></select>
+      </div>
+      <p class="card-sub">Всі задачі співробітника за місяць (створення), включно із завершеними · порівняння з попереднім місяцем і найуспішніший місяць за обраний рік</p>
+      <div class="people-grid" id="peopleGridAdmins"></div>
+      <p class="card-sub" style="margin:12px 0 0">* Останній місяць обраного року може бути неповним (якщо це поточний місяць); дельта й проєкція розраховані з урахуванням цього.</p>
+      <p class="card-sub" style="margin:4px 0 0">% завантаженості для цієї ролі — окремий розрахунок, буде додано пізніше.</p>
+    </div>
+
+    <div class="card">
+      <h2>Дизайнери — деталізація</h2>
+      <p class="card-sub">Активні задачі зараз і загальний обсяг за весь період (18.01–17.07.2026)</p>
+      <div class="chart-scroll">
+        <table class="data-table" id="designerTable"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Розподіл задач за типом роботи</h2>
+      <p class="card-sub">Чернетка класифікації за назвою задачі (і першим рядком опису, якщо назва не дала сигналу) — поля «тип» у Planner немає, розподіл орієнтовний і потребує вашої звірки</p>
+      <div id="categoryChart"></div>
+      <div class="note" style="margin-top:14px">
+        <b>Категорії та ключові слова (чернетка):</b>
+        <ul class="kw-list">
+          <li><b>Сайт + додаток</b> — «банер», «додаток», «застосунок»</li>
+          <li><b>Соцмережі</b> — «ТГ»/телеграм, «інста», facebook, «соцмереж»</li>
+          <li><b>Картки товару</b> — «картк(а/и)»</li>
+          <li><b>Категорії</b> — «категор…»</li>
+          <li><b>Сторінки сайту</b> — «сторінк…», «посадков…», «лендінг»</li>
+          <li><b>Акції</b> — «ціна», «знижк…», «акці…», «промо», «лейб…», «цінник»</li>
+          <li><b>Адаптація + ресайзи</b> — «адаптац…», «ресайз…»</li>
+          <li><b>Технічне адміністрування</b> — «видал…», «прибрат…», «правк…», «заміна», «товар», «сайт» (залишкові адмін-правки)</li>
+          <li><b>РКТ</b> — «РКТ», «РЛ» / «RL»</li>
+          <li><b>Розсилки + пуші</b> — «пуш», «розсилк…», «email»</li>
+          <li><b>Атрибути</b> — «атрибут…»</li>
+        </ul>
+        <div style="margin-top:10px">
+          <b>Інше / не визначено (19.8%, 665 задач)</b> — найбільша «категорія», але це не реальний тип роботи: сюди потрапляють задачі без явних маркерів у назві («Креатив Х», «Нічний ЦІНОкач», назви лише з датою/артикулом тощо). Знизити цю частку можна, додаючи короткий тег типу задачі при постановці.
+        </div>
+        <div style="margin-top:6px">
+          Також маю обмеження: опис задачі (нотатки) часто містить повний бриф одразу на кілька каналів (банер + пуш + Telegram + ресайзи в одному тексті) — тому класифікація спирається переважно на назву задачі, а нотатки використовуються, лише якщо назва не дала сигналу.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>AI-висновки: як працює команда і що можна покращити</h2>
+      <p class="card-sub">Згенеровано на основі даних вище — не жива AI-модель, а розрахункові спостереження</p>
+      <ul class="insights-list" id="aiInsights"></ul>
+    </div>
+
+  </div>
+
+  <!-- TAB 3 -->
+  <div class="tab-panel" id="t3">
+
+    <div class="dropzone" id="dropzoneUx">
+      <div class="dz-title">📂 Оновити дані UX/UI</div>
+      <div class="dz-sub">Перетягніть Jira-експорти «Better Excel (All fields)» (.xlsx) сюди або натисніть, щоб обрати — можна кілька файлів одразу (наприклад, якщо Jira вивантажує частинами). Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
+      <input type="file" id="fileInputUx" accept=".xlsx" multiple hidden>
+    </div>
+    <div class="upload-status" id="uploadStatusUx"></div>
+
+    <div class="kpi-row" id="kpiRowUx"></div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <h2>Задачі за місяць (створено)</h2>
+        <select class="year-select" id="yearSelectUxSum"></select>
+      </div>
+      <p class="card-sub">Дата резолюції заповнена лише у 16 з 236 задач, тому окремо не додаємо — рахуємо тільки створені · перший і останній місяць обраного року можуть бути неповними</p>
+      <div class="chart-scroll">
+        <div class="chart-wrap" id="sumChartWrapUx"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Стадії активних задач</h2>
+      <p class="card-sub">На чому зараз стоять 112 активних задач (To Do, In Progress, On Review, On Hold — Implementation і Done вважаємо завершеними)</p>
+      <div id="stageChartUx"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <h2>Завантаженість UX/UI-дизайнерів по місяцях</h2>
+        <select class="year-select" id="yearSelectUxWorkload"></select>
+      </div>
+      <p class="card-sub">За обраний рік · порівняння з попереднім місяцем і найуспішніший місяць за цей рік · Кошева Галина Василівна (1 задача) виключена з аналітики</p>
+      <div class="people-grid" id="peopleGridUx"></div>
+      <p class="card-sub" style="margin:12px 0 0">* Останній місяць обраного року може бути неповним (якщо це поточний місяць). З початком кожного нового року блок за замовчуванням автоматично перемикається на актуальний рік — попередні роки лишаються доступні через дропдаун.</p>
+      <p class="card-sub" style="margin:4px 0 0">% завантаженості: 8 робочих год/день, робочі дні місяця (пн–пт), 22.7 год на задачу — середнє з реальних Time Spent (є лише у 72 з 236 задач). Це грубе наближення: витрачений час сильно різниться між задачами (від 2 до 152 год).</p>
+    </div>
+
+    <div class="card">
+      <h2>UX/UI-дизайнери — деталізація</h2>
+      <p class="card-sub">Активні задачі зараз і загальний обсяг за весь період (29.05.2025–17.07.2026)</p>
+      <div class="chart-scroll">
+        <table class="data-table" id="designerTableUx"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Розподіл задач за типом роботи</h2>
+      <p class="card-sub">Поки недоступно</p>
+      <div class="note">У вигрузці Jira немає заповненого поля типу роботи (Components, Labels, «Тип робіт» — майже всі порожні), а Epic Link надто розрізнений (61 унікальна назва на 236 задач), щоб служити категорією. Якщо є лейбл/поле, яким варто скористатись, або власна класифікація типів UX/UI-задач — скажіть, і я додам цей розподіл.</div>
+    </div>
+
+    <div class="card">
+      <h2>AI-висновки: UX/UI</h2>
+      <p class="card-sub">Згенеровано на основі даних вище — не жива AI-модель, а розрахункові спостереження</p>
+      <ul class="insights-list" id="aiInsightsUx"></ul>
+    </div>
+
+  </div>
+
+  <!-- TAB 2 -->
+  <div class="tab-panel" id="t2">
+    <div class="card placeholder-card">
+      <h2>Успішність проєктів (продактовнерська вкладка)</h2>
+      <p class="card-sub">Ця вкладка ще не наповнена — потрібні експорти з Trello (проєктні дошки) та внутрішньої дошки.</p>
+      <p style="font-size:13.5px; color:var(--text-secondary); line-height:1.6; margin-top:10px">
+        За результатами обговорення показники, які тут будуть: <b>дотримання строків</b>, <b>виконання скоупу / етапів</b>, <b>ризики та блокери</b>.
+      </p>
+      <ul class="checklist">
+        <li>Trello-експорт (JSON) кожної проєктної дошки — картки, списки/колонки, учасники, due date, дата завершення, лейбли</li>
+        <li>Назва списку/колонки, що відповідає плановій даті здачі проєкту (чи є окрема картка-майлстоун?)</li>
+        <li>Що вважати «етапом проєкту» — список на дошці чи чекліст усередині картки?</li>
+        <li>Чим позначені ризики/блокери — окремий лейбл, список «Blocked», коментар?</li>
+        <li>Назва й формат внутрішньої дошки, і як з неї вигрузити дані</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script id="data-json" type="application/json">{"meta": {"total_tasks": 3354, "date_min": "2026-01-18", "date_max": "2026-07-17", "active_now": 62, "overdue_count": 38, "overdue_rate": 0.0113}, "months": ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"], "monthly_sum": {"2026-01": 498, "2026-02": 1062, "2026-03": 1369, "2026-04": 1061, "2026-05": 1118, "2026-06": 976, "2026-07": 562}, "person_monthly": {"Валіахметова Оксана Андріївна": {"2026-01": 41, "2026-02": 80, "2026-03": 92, "2026-04": 51, "2026-05": 86, "2026-06": 77, "2026-07": 41}, "Шаптала Оксана Станіславівна": {"2026-01": 50, "2026-02": 51, "2026-03": 82, "2026-04": 80, "2026-05": 85, "2026-06": 63, "2026-07": 38}, "Дрижак Ірина Вадимівна": {"2026-01": 36, "2026-02": 73, "2026-03": 83, "2026-04": 77, "2026-05": 72, "2026-06": 63, "2026-07": 47}, "Павліченко Анна Олегівна": {"2026-01": 32, "2026-02": 70, "2026-03": 80, "2026-04": 65, "2026-05": 59, "2026-06": 53, "2026-07": 37}, "Сумцов Кирило Юрійович": {"2026-01": 13, "2026-02": 9, "2026-03": 37, "2026-04": 19, "2026-05": 16, "2026-06": 23, "2026-07": 6}, "Берднікова Катерина Владиславівна": {"2026-01": 0, "2026-02": 0, "2026-03": 1, "2026-04": 0, "2026-05": 3, "2026-06": 20, "2026-07": 15}, "Кошевий Максим Русланович": {"2026-01": 37, "2026-02": 151, "2026-03": 217, "2026-04": 155, "2026-05": 180, "2026-06": 141, "2026-07": 79}, "Веретенников Сергій Миколайович": {"2026-01": 103, "2026-02": 174, "2026-03": 239, "2026-04": 199, "2026-05": 197, "2026-06": 189, "2026-07": 98}}, "person_insights": {"Валіахметова Оксана Андріївна": {"last_month": "2026-07", "last_value": 41, "prev_month": "2026-06", "prev_value": 77, "delta": -36, "best_month": "2026-03", "best_value": 92, "total": 468, "last_value_projected": 75, "workload_pct_monthly": {"2026-01": 102.5, "2026-02": 100, "2026-03": 104.5, "2026-04": 58, "2026-05": 102.4, "2026-06": 87.5, "2026-07": 78.8}}, "Шаптала Оксана Станіславівна": {"last_month": "2026-07", "last_value": 38, "prev_month": "2026-06", "prev_value": 63, "delta": -25, "best_month": "2026-05", "best_value": 85, "total": 449, "last_value_projected": 69, "workload_pct_monthly": {"2026-01": 125, "2026-02": 63.8, "2026-03": 93.2, "2026-04": 90.9, "2026-05": 101.2, "2026-06": 71.6, "2026-07": 73.1}}, "Дрижак Ірина Вадимівна": {"last_month": "2026-07", "last_value": 47, "prev_month": "2026-06", "prev_value": 63, "delta": -16, "best_month": "2026-03", "best_value": 83, "total": 451, "last_value_projected": 86, "workload_pct_monthly": {"2026-01": 90, "2026-02": 91.3, "2026-03": 94.3, "2026-04": 87.5, "2026-05": 85.7, "2026-06": 71.6, "2026-07": 90.4}}, "Павліченко Анна Олегівна": {"last_month": "2026-07", "last_value": 37, "prev_month": "2026-06", "prev_value": 53, "delta": -16, "best_month": "2026-03", "best_value": 80, "total": 396, "last_value_projected": 67, "workload_pct_monthly": {"2026-01": 80, "2026-02": 87.5, "2026-03": 90.9, "2026-04": 73.9, "2026-05": 70.2, "2026-06": 60.2, "2026-07": 71.2}}, "Сумцов Кирило Юрійович": {"last_month": "2026-07", "last_value": 6, "prev_month": "2026-06", "prev_value": 23, "delta": -17, "best_month": "2026-03", "best_value": 37, "total": 123, "last_value_projected": 11}, "Берднікова Катерина Владиславівна": {"last_month": "2026-07", "last_value": 15, "prev_month": "2026-06", "prev_value": 20, "delta": -5, "best_month": "2026-06", "best_value": 20, "total": 39, "last_value_projected": 27}, "Кошевий Максим Русланович": {"last_month": "2026-07", "last_value": 79, "prev_month": "2026-06", "prev_value": 141, "delta": -62, "best_month": "2026-03", "best_value": 217, "total": 960, "last_value_projected": 144}, "Веретенников Сергій Миколайович": {"last_month": "2026-07", "last_value": 98, "prev_month": "2026-06", "prev_value": 189, "delta": -91, "best_month": "2026-03", "best_value": 239, "total": 1199, "last_value_projected": 179}}, "current_year": 2026, "by_year": {"2026": {"months": ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"], "monthly_sum": {"2026-01": 498, "2026-02": 1062, "2026-03": 1369, "2026-04": 1061, "2026-05": 1118, "2026-06": 976, "2026-07": 562}, "person_monthly": {"Валіахметова Оксана Андріївна": {"2026-01": 41, "2026-02": 80, "2026-03": 92, "2026-04": 51, "2026-05": 86, "2026-06": 77, "2026-07": 41}, "Шаптала Оксана Станіславівна": {"2026-01": 50, "2026-02": 51, "2026-03": 82, "2026-04": 80, "2026-05": 85, "2026-06": 63, "2026-07": 38}, "Дрижак Ірина Вадимівна": {"2026-01": 36, "2026-02": 73, "2026-03": 83, "2026-04": 77, "2026-05": 72, "2026-06": 63, "2026-07": 47}, "Павліченко Анна Олегівна": {"2026-01": 32, "2026-02": 70, "2026-03": 80, "2026-04": 65, "2026-05": 59, "2026-06": 53, "2026-07": 37}, "Сумцов Кирило Юрійович": {"2026-01": 13, "2026-02": 9, "2026-03": 37, "2026-04": 19, "2026-05": 16, "2026-06": 23, "2026-07": 6}, "Берднікова Катерина Владиславівна": {"2026-01": 0, "2026-02": 0, "2026-03": 1, "2026-04": 0, "2026-05": 3, "2026-06": 20, "2026-07": 15}, "Кошевий Максим Русланович": {"2026-01": 37, "2026-02": 151, "2026-03": 217, "2026-04": 155, "2026-05": 180, "2026-06": 141, "2026-07": 79}, "Веретенников Сергій Миколайович": {"2026-01": 103, "2026-02": 174, "2026-03": 239, "2026-04": 199, "2026-05": 197, "2026-06": 189, "2026-07": 98}}, "person_insights": {"Валіахметова Оксана Андріївна": {"last_month": "2026-07", "last_value": 41, "prev_month": "2026-06", "prev_value": 77, "delta": -36, "best_month": "2026-03", "best_value": 92, "total": 468, "last_value_projected": 75, "workload_pct_monthly": {"2026-01": 102.5, "2026-02": 100, "2026-03": 104.5, "2026-04": 58, "2026-05": 102.4, "2026-06": 87.5, "2026-07": 78.8}}, "Шаптала Оксана Станіславівна": {"last_month": "2026-07", "last_value": 38, "prev_month": "2026-06", "prev_value": 63, "delta": -25, "best_month": "2026-05", "best_value": 85, "total": 449, "last_value_projected": 69, "workload_pct_monthly": {"2026-01": 125, "2026-02": 63.8, "2026-03": 93.2, "2026-04": 90.9, "2026-05": 101.2, "2026-06": 71.6, "2026-07": 73.1}}, "Дрижак Ірина Вадимівна": {"last_month": "2026-07", "last_value": 47, "prev_month": "2026-06", "prev_value": 63, "delta": -16, "best_month": "2026-03", "best_value": 83, "total": 451, "last_value_projected": 86, "workload_pct_monthly": {"2026-01": 90, "2026-02": 91.3, "2026-03": 94.3, "2026-04": 87.5, "2026-05": 85.7, "2026-06": 71.6, "2026-07": 90.4}}, "Павліченко Анна Олегівна": {"last_month": "2026-07", "last_value": 37, "prev_month": "2026-06", "prev_value": 53, "delta": -16, "best_month": "2026-03", "best_value": 80, "total": 396, "last_value_projected": 67, "workload_pct_monthly": {"2026-01": 80, "2026-02": 87.5, "2026-03": 90.9, "2026-04": 73.9, "2026-05": 70.2, "2026-06": 60.2, "2026-07": 71.2}}, "Сумцов Кирило Юрійович": {"last_month": "2026-07", "last_value": 6, "prev_month": "2026-06", "prev_value": 23, "delta": -17, "best_month": "2026-03", "best_value": 37, "total": 123, "last_value_projected": 11}, "Берднікова Катерина Владиславівна": {"last_month": "2026-07", "last_value": 15, "prev_month": "2026-06", "prev_value": 20, "delta": -5, "best_month": "2026-06", "best_value": 20, "total": 39, "last_value_projected": 27}, "Кошевий Максим Русланович": {"last_month": "2026-07", "last_value": 79, "prev_month": "2026-06", "prev_value": 141, "delta": -62, "best_month": "2026-03", "best_value": 217, "total": 960, "last_value_projected": 144}, "Веретенников Сергій Миколайович": {"last_month": "2026-07", "last_value": 98, "prev_month": "2026-06", "prev_value": 189, "delta": -91, "best_month": "2026-03", "best_value": 239, "total": 1199, "last_value_projected": 179}}}}, "designer_table": [{"name": "Шаптала Оксана Станіславівна", "active": 19, "total": 449}, {"name": "Кошевий Максим Русланович", "active": 12, "total": 960}, {"name": "Веретенников Сергій Миколайович", "active": 11, "total": 1199}, {"name": "Дрижак Ірина Вадимівна", "active": 9, "total": 451}, {"name": "Сумцов Кирило Юрійович", "active": 7, "total": 123}, {"name": "Павліченко Анна Олегівна", "active": 5, "total": 396}, {"name": "Берднікова Катерина Владиславівна", "active": 4, "total": 39}, {"name": "Валіахметова Оксана Андріївна", "active": 3, "total": 468}], "category_dist": {"Інше / не визначено": 665, "Технічне адміністрування": 392, "Соцмережі": 83, "Категорії": 171, "Сайт + додаток": 481, "Акції": 454, "РКТ": 161, "Адаптація + ресайзи": 410, "Сторінки сайту": 281, "Атрибути": 131, "Розсилки + пуші": 117, "Картки товару": 8}, "priority_dist": {"Средний": 3234, "Важно": 64, "Срочно": 56}, "state_dist": {"Не начато": 39, "Выполняется": 23, "Завершено": 3292}, "segment_active": {"DESIGN NEW": 9, "DESIGN ON CREATION": 5, "DESIGN IN REVIEW": 21, "SUPPORT NEW": 14, "ON HOLD": 9, "SUPPORT ON CREATION": 4}}</script>
+<script id="data-json-ux" type="application/json">{"meta": {"total_tasks": 236, "date_min": "2025-05-29", "date_max": "2026-07-17", "active_now": 120, "avg_hours_per_task": 22.7, "avg_hours_n": 72}, "months": ["2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"], "capacity_hours_monthly": {"2025-05": 16, "2025-06": 168, "2025-07": 184, "2025-08": 168, "2025-09": 176, "2025-10": 184, "2025-11": 160, "2025-12": 184, "2026-01": 176, "2026-02": 160, "2026-03": 176, "2026-04": 176, "2026-05": 168, "2026-06": 176, "2026-07": 104}, "monthly_sum": {"2025-05": 1, "2025-06": 3, "2025-07": 6, "2025-08": 3, "2025-09": 11, "2025-10": 2, "2025-11": 10, "2025-12": 10, "2026-01": 18, "2026-02": 9, "2026-03": 23, "2026-04": 33, "2026-05": 38, "2026-06": 41, "2026-07": 28}, "person_monthly": {"Кокін Михайло Юрійович": {"2025-05": 1, "2025-06": 0, "2025-07": 2, "2025-08": 0, "2025-09": 6, "2025-10": 0, "2025-11": 2, "2025-12": 0, "2026-01": 7, "2026-02": 3, "2026-03": 5, "2026-04": 6, "2026-05": 8, "2026-06": 7, "2026-07": 9}, "Шевченко Уляна Олексіївна": {"2025-05": 0, "2025-06": 1, "2025-07": 1, "2025-08": 3, "2025-09": 1, "2025-10": 2, "2025-11": 3, "2025-12": 6, "2026-01": 7, "2026-02": 4, "2026-03": 0, "2026-04": 3, "2026-05": 10, "2026-06": 9, "2026-07": 5}, "Кириченко Дар'я Костянтинівна": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 1, "2025-12": 0, "2026-01": 0, "2026-02": 1, "2026-03": 10, "2026-04": 10, "2026-05": 9, "2026-06": 10, "2026-07": 5}, "Куреня Богдан Володимирович": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 0, "2025-12": 4, "2026-01": 3, "2026-02": 1, "2026-03": 3, "2026-04": 2, "2026-05": 5, "2026-06": 13, "2026-07": 8}, "Філяк Мирон Петрович": {"2025-05": 0, "2025-06": 1, "2025-07": 0, "2025-08": 0, "2025-09": 2, "2025-10": 0, "2025-11": 2, "2025-12": 0, "2026-01": 1, "2026-02": 0, "2026-03": 5, "2026-04": 11, "2026-05": 6, "2026-06": 2, "2026-07": 1}}, "person_insights": {"Кокін Михайло Юрійович": {"last_month": "2026-07", "last_value": 9, "prev_month": "2026-06", "prev_value": 7, "delta": 2, "best_month": "2026-07", "best_value": 9, "total": 56, "last_value_projected": 16, "workload_pct_monthly": {"2025-05": 141.9, "2025-06": 0, "2025-07": 24.7, "2025-08": 0, "2025-09": 77.4, "2025-10": 0, "2025-11": 28.4, "2025-12": 0, "2026-01": 90.3, "2026-02": 42.6, "2026-03": 64.5, "2026-04": 77.4, "2026-05": 108.1, "2026-06": 90.3, "2026-07": 196.4}}, "Шевченко Уляна Олексіївна": {"last_month": "2026-07", "last_value": 5, "prev_month": "2026-06", "prev_value": 9, "delta": -4, "best_month": "2026-05", "best_value": 10, "total": 55, "last_value_projected": 9, "workload_pct_monthly": {"2025-05": 0, "2025-06": 13.5, "2025-07": 12.3, "2025-08": 40.5, "2025-09": 12.9, "2025-10": 24.7, "2025-11": 42.6, "2025-12": 74, "2026-01": 90.3, "2026-02": 56.8, "2026-03": 0, "2026-04": 38.7, "2026-05": 135.1, "2026-06": 116.1, "2026-07": 109.1}}, "Кириченко Дар'я Костянтинівна": {"last_month": "2026-07", "last_value": 5, "prev_month": "2026-06", "prev_value": 10, "delta": -5, "best_month": "2026-03", "best_value": 10, "total": 46, "last_value_projected": 9, "workload_pct_monthly": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 14.2, "2025-12": 0, "2026-01": 0, "2026-02": 14.2, "2026-03": 129, "2026-04": 129, "2026-05": 121.6, "2026-06": 129, "2026-07": 109.1}}, "Куреня Богдан Володимирович": {"last_month": "2026-07", "last_value": 8, "prev_month": "2026-06", "prev_value": 13, "delta": -5, "best_month": "2026-06", "best_value": 13, "total": 39, "last_value_projected": 14, "workload_pct_monthly": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 0, "2025-12": 49.3, "2026-01": 38.7, "2026-02": 14.2, "2026-03": 38.7, "2026-04": 25.8, "2026-05": 67.6, "2026-06": 167.7, "2026-07": 174.6}}, "Філяк Мирон Петрович": {"last_month": "2026-07", "last_value": 1, "prev_month": "2026-06", "prev_value": 2, "delta": -1, "best_month": "2026-04", "best_value": 11, "total": 31, "last_value_projected": 2, "workload_pct_monthly": {"2025-05": 0, "2025-06": 13.5, "2025-07": 0, "2025-08": 0, "2025-09": 25.8, "2025-10": 0, "2025-11": 28.4, "2025-12": 0, "2026-01": 12.9, "2026-02": 0, "2026-03": 64.5, "2026-04": 141.9, "2026-05": 81.1, "2026-06": 25.8, "2026-07": 21.8}}}, "current_year": 2026, "by_year": {"2025": {"months": ["2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"], "monthly_sum": {"2025-05": 1, "2025-06": 3, "2025-07": 6, "2025-08": 3, "2025-09": 11, "2025-10": 2, "2025-11": 10, "2025-12": 10}, "person_monthly": {"Кокін Михайло Юрійович": {"2025-05": 1, "2025-06": 0, "2025-07": 2, "2025-08": 0, "2025-09": 6, "2025-10": 0, "2025-11": 2, "2025-12": 0}, "Шевченко Уляна Олексіївна": {"2025-05": 0, "2025-06": 1, "2025-07": 1, "2025-08": 3, "2025-09": 1, "2025-10": 2, "2025-11": 3, "2025-12": 6}, "Кириченко Дар'я Костянтинівна": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 1, "2025-12": 0}, "Куреня Богдан Володимирович": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 0, "2025-12": 4}, "Філяк Мирон Петрович": {"2025-05": 0, "2025-06": 1, "2025-07": 0, "2025-08": 0, "2025-09": 2, "2025-10": 0, "2025-11": 2, "2025-12": 0}}, "person_insights": {"Кокін Михайло Юрійович": {"last_month": "2025-12", "last_value": 0, "prev_month": "2025-11", "prev_value": 2, "delta": -2, "best_month": "2025-09", "best_value": 6, "total": 11, "workload_pct_monthly": {"2025-05": 141.9, "2025-06": 0, "2025-07": 24.7, "2025-08": 0, "2025-09": 77.4, "2025-10": 0, "2025-11": 28.4, "2025-12": 0}}, "Шевченко Уляна Олексіївна": {"last_month": "2025-12", "last_value": 6, "prev_month": "2025-11", "prev_value": 3, "delta": 3, "best_month": "2025-12", "best_value": 6, "total": 17, "workload_pct_monthly": {"2025-05": 0, "2025-06": 13.5, "2025-07": 12.3, "2025-08": 40.5, "2025-09": 12.9, "2025-10": 24.7, "2025-11": 42.6, "2025-12": 74}}, "Кириченко Дар'я Костянтинівна": {"last_month": "2025-12", "last_value": 0, "prev_month": "2025-11", "prev_value": 1, "delta": -1, "best_month": "2025-11", "best_value": 1, "total": 1, "workload_pct_monthly": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 14.2, "2025-12": 0}}, "Куреня Богдан Володимирович": {"last_month": "2025-12", "last_value": 4, "prev_month": "2025-11", "prev_value": 0, "delta": 4, "best_month": "2025-12", "best_value": 4, "total": 4, "workload_pct_monthly": {"2025-05": 0, "2025-06": 0, "2025-07": 0, "2025-08": 0, "2025-09": 0, "2025-10": 0, "2025-11": 0, "2025-12": 49.3}}, "Філяк Мирон Петрович": {"last_month": "2025-12", "last_value": 0, "prev_month": "2025-11", "prev_value": 2, "delta": -2, "best_month": "2025-09", "best_value": 2, "total": 5, "workload_pct_monthly": {"2025-05": 0, "2025-06": 13.5, "2025-07": 0, "2025-08": 0, "2025-09": 25.8, "2025-10": 0, "2025-11": 28.4, "2025-12": 0}}}}, "2026": {"months": ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"], "monthly_sum": {"2026-01": 18, "2026-02": 9, "2026-03": 23, "2026-04": 33, "2026-05": 38, "2026-06": 41, "2026-07": 28}, "person_monthly": {"Кокін Михайло Юрійович": {"2026-01": 7, "2026-02": 3, "2026-03": 5, "2026-04": 6, "2026-05": 8, "2026-06": 7, "2026-07": 9}, "Шевченко Уляна Олексіївна": {"2026-01": 7, "2026-02": 4, "2026-03": 0, "2026-04": 3, "2026-05": 10, "2026-06": 9, "2026-07": 5}, "Кириченко Дар'я Костянтинівна": {"2026-01": 0, "2026-02": 1, "2026-03": 10, "2026-04": 10, "2026-05": 9, "2026-06": 10, "2026-07": 5}, "Куреня Богдан Володимирович": {"2026-01": 3, "2026-02": 1, "2026-03": 3, "2026-04": 2, "2026-05": 5, "2026-06": 13, "2026-07": 8}, "Філяк Мирон Петрович": {"2026-01": 1, "2026-02": 0, "2026-03": 5, "2026-04": 11, "2026-05": 6, "2026-06": 2, "2026-07": 1}}, "person_insights": {"Кокін Михайло Юрійович": {"last_month": "2026-07", "last_value": 9, "prev_month": "2026-06", "prev_value": 7, "delta": 2, "best_month": "2026-07", "best_value": 9, "total": 45, "last_value_projected": 16, "workload_pct_monthly": {"2026-01": 90.3, "2026-02": 42.6, "2026-03": 64.5, "2026-04": 77.4, "2026-05": 108.1, "2026-06": 90.3, "2026-07": 196.4}}, "Шевченко Уляна Олексіївна": {"last_month": "2026-07", "last_value": 5, "prev_month": "2026-06", "prev_value": 9, "delta": -4, "best_month": "2026-05", "best_value": 10, "total": 38, "last_value_projected": 9, "workload_pct_monthly": {"2026-01": 90.3, "2026-02": 56.8, "2026-03": 0, "2026-04": 38.7, "2026-05": 135.1, "2026-06": 116.1, "2026-07": 109.1}}, "Кириченко Дар'я Костянтинівна": {"last_month": "2026-07", "last_value": 5, "prev_month": "2026-06", "prev_value": 10, "delta": -5, "best_month": "2026-03", "best_value": 10, "total": 45, "last_value_projected": 9, "workload_pct_monthly": {"2026-01": 0, "2026-02": 14.2, "2026-03": 129, "2026-04": 129, "2026-05": 121.6, "2026-06": 129, "2026-07": 109.1}}, "Куреня Богдан Володимирович": {"last_month": "2026-07", "last_value": 8, "prev_month": "2026-06", "prev_value": 13, "delta": -5, "best_month": "2026-06", "best_value": 13, "total": 35, "last_value_projected": 14, "workload_pct_monthly": {"2026-01": 38.7, "2026-02": 14.2, "2026-03": 38.7, "2026-04": 25.8, "2026-05": 67.6, "2026-06": 167.7, "2026-07": 174.6}}, "Філяк Мирон Петрович": {"last_month": "2026-07", "last_value": 1, "prev_month": "2026-06", "prev_value": 2, "delta": -1, "best_month": "2026-04", "best_value": 11, "total": 26, "last_value_projected": 2, "workload_pct_monthly": {"2026-01": 12.9, "2026-02": 0, "2026-03": 64.5, "2026-04": 141.9, "2026-05": 81.1, "2026-06": 25.8, "2026-07": 21.8}}}}}, "designer_table": [{"name": "Кокін Михайло Юрійович", "active": 32, "total": 56}, {"name": "Куреня Богдан Володимирович", "active": 22, "total": 39}, {"name": "Кириченко Дар'я Костянтинівна", "active": 21, "total": 46}, {"name": "Шевченко Уляна Олексіївна", "active": 20, "total": 55}, {"name": "Філяк Мирон Петрович", "active": 17, "total": 31}], "status_dist": {"To Do": 36, "In Progress": 11, "On Review": 25, "Implementation": 100, "On Hold": 48, "Done": 16}, "active_status_dist": {"To Do": 36, "In Progress": 11, "On Review": 25, "On Hold": 48}, "priority_dist": {"Highest": 14, "Medium": 193, "Lowest": 1, "Low": 2, "High": 26}}</script>
+
+<script>
+// ==================== xlsx-core.js (inlined) ====================
+// Minimal in-browser XLSX reader: ZIP central-directory parsing + DOMParser XML mapping.
+// No external deps. In the browser, `inflateRaw` should be backed by DecompressionStream('deflate-raw').
+// For Node testing, we inject a zlib-based inflateRaw implementation (see xlsx-core.node-shim.js).
+
+const ZIP_SIG_EOCD = 0x06054b50;
+const ZIP_SIG_CENTRAL = 0x02014b50;
+const ZIP_SIG_LOCAL = 0x04034b50;
+
+function findEOCD(buf) {
+  // Scan backward for EOCD signature (no zip64 comment handling needed for xlsx from Excel/Jira)
+  const view = new DataView(buf);
+  const maxScan = Math.min(buf.byteLength, 65557); // EOCD + max comment length
+  const start = buf.byteLength - maxScan;
+  for (let i = buf.byteLength - 22; i >= start; i--) {
+    if (view.getUint32(i, true) === ZIP_SIG_EOCD) {
+      return i;
+    }
+  }
+  throw new Error('Не вдалося знайти кінець ZIP-архіву (EOCD) — файл пошкоджений або не є .xlsx');
+}
+
+function readCentralDirectory(buf) {
+  const view = new DataView(buf);
+  const eocdOffset = findEOCD(buf);
+  const entryCount = view.getUint16(eocdOffset + 10, true);
+  const centralDirOffset = view.getUint32(eocdOffset + 16, true);
+
+  const entries = {};
+  let offset = centralDirOffset;
+  for (let i = 0; i < entryCount; i++) {
+    const sig = view.getUint32(offset, true);
+    if (sig !== ZIP_SIG_CENTRAL) {
+      throw new Error('Пошкоджений central directory ZIP-запис на позиції ' + offset);
+    }
+    const compressionMethod = view.getUint16(offset + 10, true);
+    const compressedSize = view.getUint32(offset + 20, true);
+    const uncompressedSize = view.getUint32(offset + 24, true);
+    const nameLen = view.getUint16(offset + 28, true);
+    const extraLen = view.getUint16(offset + 30, true);
+    const commentLen = view.getUint16(offset + 32, true);
+    const localHeaderOffset = view.getUint32(offset + 42, true);
+    const nameBytes = new Uint8Array(buf, offset + 46, nameLen);
+    const name = new TextDecoder('utf-8').decode(nameBytes);
+
+    entries[name] = { compressionMethod, compressedSize, uncompressedSize, localHeaderOffset };
+    offset += 46 + nameLen + extraLen + commentLen;
+  }
+  return entries;
+}
+
+function readLocalFileData(buf, entry) {
+  const view = new DataView(buf);
+  const off = entry.localHeaderOffset;
+  const sig = view.getUint32(off, true);
+  if (sig !== ZIP_SIG_LOCAL) {
+    throw new Error('Пошкоджений local file header ZIP-запис на позиції ' + off);
+  }
+  const nameLen = view.getUint16(off + 26, true);
+  const extraLen = view.getUint16(off + 28, true);
+  const dataStart = off + 30 + nameLen + extraLen;
+  // Always trust central directory's compressedSize (local header size fields can be 0
+  // when the "data descriptor" bit is set — never rely on them).
+  return buf.slice(dataStart, dataStart + entry.compressedSize);
+}
+
+// inflateRaw(arrayBuffer) => Promise<ArrayBuffer>, injected per-environment.
+async function extractPart(buf, entries, partName, inflateRaw) {
+  const entry = entries[partName];
+  if (!entry) return null;
+  const raw = readLocalFileData(buf, entry);
+  if (entry.compressionMethod === 0) {
+    return raw; // stored, no compression
+  }
+  if (entry.compressionMethod !== 8) {
+    throw new Error(`Непідтримуваний метод стиснення ${entry.compressionMethod} для ${partName}`);
+  }
+  return await inflateRaw(raw);
+}
+
+function bytesToText(buf) {
+  return new TextDecoder('utf-8').decode(buf);
+}
+
+// ---- OOXML-specific parsing ----
+
+function parseSharedStrings(xmlText) {
+  if (!xmlText) return [];
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  const siNodes = doc.getElementsByTagName('si');
+  const out = [];
+  for (let i = 0; i < siNodes.length; i++) {
+    const si = siNodes[i];
+    // Concatenate all <t> descendant text (handles rich-text runs split across <r><t>)
+    const tNodes = si.getElementsByTagName('t');
+    let text = '';
+    for (let j = 0; j < tNodes.length; j++) text += tNodes[j].textContent;
+    out.push(text);
+  }
+  return out;
+}
+
+function colLetterToIndex(letters) {
+  let n = 0;
+  for (let i = 0; i < letters.length; i++) {
+    n = n * 26 + (letters.charCodeAt(i) - 64);
+  }
+  return n - 1; // 0-based
+}
+
+function parseCellRef(r) {
+  const m = /^([A-Z]+)(\d+)$/.exec(r);
+  return { col: colLetterToIndex(m[1]), row: parseInt(m[2], 10) };
+}
+
+// Returns array of rows, each row is an array of cell values (sparse-safe, 0-indexed columns).
+function parseWorksheet(xmlText, sharedStrings) {
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  const rowNodes = doc.getElementsByTagName('row');
+  const rows = [];
+  for (let i = 0; i < rowNodes.length; i++) {
+    const rowNode = rowNodes[i];
+    const rowIndex = parseInt(rowNode.getAttribute('r'), 10) - 1;
+    const rowArr = rows[rowIndex] || (rows[rowIndex] = []);
+    const cellNodes = rowNode.getElementsByTagName('c');
+    for (let j = 0; j < cellNodes.length; j++) {
+      const c = cellNodes[j];
+      const ref = c.getAttribute('r');
+      const { col } = parseCellRef(ref);
+      const type = c.getAttribute('t');
+      let value = null;
+
+      if (type === 's') {
+        const vNode = c.getElementsByTagName('v')[0];
+        const idx = vNode ? parseInt(vNode.textContent, 10) : null;
+        value = idx !== null ? (sharedStrings[idx] ?? '') : '';
+      } else if (type === 'inlineStr') {
+        const isNode = c.getElementsByTagName('is')[0];
+        value = isNode ? isNode.textContent : '';
+      } else if (type === 'str' || type === 'b') {
+        const vNode = c.getElementsByTagName('v')[0];
+        value = vNode ? vNode.textContent : '';
+      } else {
+        // numeric (dates included — resolved later by caller who knows which columns are dates)
+        const vNode = c.getElementsByTagName('v')[0];
+        value = vNode ? parseFloat(vNode.textContent) : null;
+      }
+      rowArr[col] = value;
+    }
+  }
+  // fill holes with empty rows/cells as undefined -> normalize to null-filled arrays later by caller
+  return rows;
+}
+
+function parseWorkbookSheetMap(workbookXml, relsXml) {
+  const doc = new DOMParser().parseFromString(workbookXml, 'application/xml');
+  const sheetNodes = doc.getElementsByTagName('sheet');
+  const nameToRid = {};
+  for (let i = 0; i < sheetNodes.length; i++) {
+    const s = sheetNodes[i];
+    const name = s.getAttribute('name');
+    const rid = s.getAttribute('r:id') || s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    nameToRid[name] = rid;
+  }
+  const relsDoc = new DOMParser().parseFromString(relsXml, 'application/xml');
+  const relNodes = relsDoc.getElementsByTagName('Relationship');
+  const ridToTarget = {};
+  for (let i = 0; i < relNodes.length; i++) {
+    const r = relNodes[i];
+    ridToTarget[r.getAttribute('Id')] = r.getAttribute('Target');
+  }
+  const nameToPart = {};
+  for (const name in nameToRid) {
+    const target = ridToTarget[nameToRid[name]];
+    nameToPart[name] = target.startsWith('/') ? target.slice(1) : ('xl/' + target);
+  }
+  return nameToPart;
+}
+
+// Excel serial date -> JS Date (UTC midnight). Valid for real-world dates after 1900-03-01.
+function excelSerialToUTCDate(serial) {
+  return new Date(Math.round((serial - 25569) * 86400 * 1000));
+}
+
+// Top-level: parse an ArrayBuffer (the raw .xlsx file bytes) into { sheetName: rows[][] }
+// `sheetNames`: array of sheet names to extract (skip the rest for speed).
+async function parseXlsx(arrayBuffer, sheetNames, inflateRaw) {
+  const entries = readCentralDirectory(arrayBuffer);
+
+  const workbookXmlBuf = await extractPart(arrayBuffer, entries, 'xl/workbook.xml', inflateRaw);
+  const relsXmlBuf = await extractPart(arrayBuffer, entries, 'xl/_rels/workbook.xml.rels', inflateRaw);
+  const sharedStringsBuf = await extractPart(arrayBuffer, entries, 'xl/sharedStrings.xml', inflateRaw);
+
+  const workbookXml = bytesToText(workbookXmlBuf);
+  const relsXml = bytesToText(relsXmlBuf);
+  const sharedStrings = sharedStringsBuf ? parseSharedStrings(bytesToText(sharedStringsBuf)) : [];
+
+  const nameToPart = parseWorkbookSheetMap(workbookXml, relsXml);
+
+  const result = {};
+  for (const sheetName of sheetNames) {
+    const partPath = nameToPart[sheetName];
+    if (!partPath) continue;
+    const sheetBuf = await extractPart(arrayBuffer, entries, partPath, inflateRaw);
+    if (!sheetBuf) continue;
+    const rows = parseWorksheet(bytesToText(sheetBuf), sharedStrings);
+    result[sheetName] = rows;
+  }
+  return result;
+}
+
+// Convert raw row-array-of-arrays (first row = headers) into array of {header: value} objects.
+function rowsToRecords(rows) {
+  if (!rows || !rows.length) return [];
+  const header = rows[0] || [];
+  const records = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const rec = {};
+    for (let c = 0; c < header.length; c++) {
+      if (header[c] == null || header[c] === '') continue;
+      rec[header[c]] = row[c] !== undefined ? row[c] : null;
+    }
+    records.push(rec);
+  }
+  return records;
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    readCentralDirectory, readLocalFileData, extractPart, parseSharedStrings,
+    parseWorksheet, parseWorkbookSheetMap, excelSerialToUTCDate, parseXlsx, rowsToRecords,
+    colLetterToIndex, parseCellRef,
+  };
+}
+
+</script>
+
+<script>
+// ==================== pipeline.js (inlined) ====================
+// Ported from the Python/pandas pipeline built earlier in this session.
+// Pure functions over already-parsed row records (see xlsx-core.js for the XLSX reader).
+
+function parseAnyDate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') {
+    return new Date(Math.round((value - 25569) * 86400 * 1000)); // Excel serial -> UTC Date
+  }
+  // Planner exports plain "YYYY-MM-DD" (or with time) text — force UTC midnight parsing.
+  const s = String(value).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function monthKey(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthKeyToBounds(key) {
+  const [y, m] = key.split('-').map(Number);
+  const start = Date.UTC(y, m - 1, 1);
+  const end = m === 12 ? Date.UTC(y + 1, 0, 1) : Date.UTC(y, m, 1);
+  return { start, end };
+}
+
+// Count Mon-Fri days in [startMs, endMsExclusive)
+function businessDaysBetween(startMs, endMsExclusive) {
+  let count = 0;
+  for (let t = startMs; t < endMsExclusive; t += 86400000) {
+    const dow = new Date(t).getUTCDay(); // 0=Sun..6=Sat
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return count;
+}
+
+// Builds an ordered list of 'YYYY-MM' keys between two Date objects (inclusive of both months).
+function monthRange(minDate, maxDate) {
+  const months = [];
+  let y = minDate.getUTCFullYear(), m = minDate.getUTCMonth();
+  const endY = maxDate.getUTCFullYear(), endM = maxDate.getUTCMonth();
+  while (y < endY || (y === endY && m <= endM)) {
+    months.push(`${y}-${String(m + 1).padStart(2, '0')}`);
+    m++;
+    if (m > 11) { m = 0; y++; }
+  }
+  return months;
+}
+
+// capacity (business-day hours) per month, clamped to the actual data's min/max date on the
+// first/last month (mirrors the Python "partial month" handling).
+function capacityHoursByMonth(months, minDate, maxDate) {
+  const out = {};
+  for (const key of months) {
+    let { start, end } = monthKeyToBounds(key);
+    if (key === months[0]) start = Date.UTC(minDate.getUTCFullYear(), minDate.getUTCMonth(), minDate.getUTCDate());
+    if (key === months[months.length - 1]) end = Date.UTC(maxDate.getUTCFullYear(), maxDate.getUTCMonth(), maxDate.getUTCDate() + 1);
+    out[key] = businessDaysBetween(start, end) * 8;
+  }
+  return out;
+}
+
+// Per-person insight stats (best/last/prev/delta, optional workload %) for an arbitrary subset
+// of months — shared by the "all time" view and the per-year dropdown views below.
+// `hoursForPerson(name)` returns hours-per-task for that person, or null/undefined to skip the
+// workload_pct_monthly calc for them. `overallMaxDate` is the true last date in the *whole*
+// dataset — only the month that actually contains it is treated as partial/projectable.
+function buildPersonInsightsFor(monthsList, personMonthlyAll, peopleList, capacityHours, hoursForPerson, overallMaxDate) {
+  const lastMonth = monthsList[monthsList.length - 1];
+  const prevMonth = monthsList.length > 1 ? monthsList[monthsList.length - 2] : null;
+  const isPartialLastMonth = lastMonth === monthKey(overallMaxDate);
+  let daysCoveredInLastMonth, daysInLastMonthFull;
+  if (isPartialLastMonth) {
+    const bounds = monthKeyToBounds(lastMonth);
+    daysInLastMonthFull = (bounds.end - bounds.start) / 86400000;
+    daysCoveredInLastMonth = (overallMaxDate.getTime() - bounds.start) / 86400000 + 1;
+  }
+
+  const insights = {};
+  for (const name of peopleList) {
+    const monthly = {};
+    for (const m of monthsList) monthly[m] = personMonthlyAll[name][m] || 0;
+    let bestMonth = monthsList[0];
+    for (const m of monthsList) if (monthly[m] > monthly[bestMonth]) bestMonth = m;
+    const lastValue = monthly[lastMonth];
+    const prevValue = prevMonth !== null ? monthly[prevMonth] : null;
+    const insight = {
+      last_month: lastMonth, last_value: lastValue,
+      prev_month: prevMonth, prev_value: prevValue,
+      delta: prevValue !== null ? lastValue - prevValue : null,
+      best_month: bestMonth, best_value: monthly[bestMonth],
+      total: Object.values(monthly).reduce((a, b) => a + b, 0),
+    };
+    if (isPartialLastMonth) {
+      insight.last_value_projected = Math.round(lastValue / daysCoveredInLastMonth * daysInLastMonthFull);
+    }
+    const hrs = hoursForPerson(name);
+    if (hrs != null) {
+      const pct = {};
+      for (const m of monthsList) pct[m] = Math.round(monthly[m] * hrs / capacityHours[m] * 1000) / 10;
+      insight.workload_pct_monthly = pct;
+    }
+    insights[name] = insight;
+  }
+  return insights;
+}
+
+// Splits the full month range into one view per calendar year, so a year-picker dropdown can
+// swap the "Задачі за місяць" chart and the per-person workload cards without recomputing
+// anything from the raw rows.
+function buildYearlyViews(months, monthlySumAll, personMonthlyAll, peopleList, capacityHours, hoursForPerson, overallMaxDate) {
+  const years = [...new Set(months.map(m => m.slice(0, 4)))].sort();
+  const byYear = {};
+  for (const year of years) {
+    const yMonths = months.filter(m => m.startsWith(year));
+    const yMonthlySum = {};
+    for (const m of yMonths) yMonthlySum[m] = monthlySumAll[m];
+    const yPersonMonthly = {};
+    for (const name of peopleList) {
+      yPersonMonthly[name] = {};
+      for (const m of yMonths) yPersonMonthly[name][m] = personMonthlyAll[name][m] || 0;
+    }
+    const yInsights = buildPersonInsightsFor(yMonths, personMonthlyAll, peopleList, capacityHours, hoursForPerson, overallMaxDate);
+    byYear[year] = { months: yMonths, monthly_sum: yMonthlySum, person_monthly: yPersonMonthly, person_insights: yInsights };
+  }
+  return byYear;
+}
+
+// ---------------- DESIGN & SUPPORT ----------------
+
+// NOTE: JS regex `\b` only treats ASCII [A-Za-z0-9_] as "word" characters — it silently fails
+// to assert a boundary next to Cyrillic letters (unlike Python's Unicode-aware `\b`). Patterns
+// that need a word boundary adjacent to Cyrillic text use an explicit Unicode-aware boundary
+// via lookaround (`(?<![\p{L}\p{N}_])...(?![\p{L}\p{N}_])`, with the `u` flag) instead of `\b`.
+// Patterns bordering only ASCII (e.g. `\bemail\b`, `\bapp\b`, `\brl\d*\b`) are unaffected and
+// keep plain `\b`.
+const DESIGN_CATEGORIES = [
+  ['Атрибути', /атрибут/],
+  ['Розсилки + пуші', /пуш|розсилк|\bemail\b|e-mail/],
+  ['РКТ', /(?<![\p{L}\p{N}_])ркт(?![\p{L}\p{N}_])|\brl\d*\b|(?<![\p{L}\p{N}_])рл\d*(?![\p{L}\p{N}_])/u],
+  ['Адаптація + ресайзи', /адаптац|ресайз|resize/],
+  ['Категорії', /категор/],
+  ['Картки товару', /картк/],
+  ['Сторінки сайту', /сторінк|посадков|лендінг|landing/],
+  ['Акції', /ціна|цін[аиу]|знижк|акці|промо|розпродаж|лейб|цінник/],
+  ['Соцмережі', /тг(?![\p{L}\p{N}_])|телеграм|інста|instagram|facebook|соцмереж/u],
+  ['Сайт + додаток', /банер|banner|додаток|додатку|застосунок|\bapp\b/],
+  ['Технічне адміністрування', /видал|прибрат|включит|закрыт|правк|замен|заміна|змін|подвяз|перенаправ|конфігуратор|товар|сайт/],
+];
+const DESIGN_OTHER = 'Інше / не визначено';
+
+function classifyDesignText(text) {
+  const t = (text || '').toLowerCase();
+  for (const [label, re] of DESIGN_CATEGORIES) {
+    if (re.test(t)) return label;
+  }
+  return null;
+}
+function classifyDesignTask(name, note) {
+  const r1 = classifyDesignText(name);
+  if (r1) return r1;
+  const firstLine = (note || '').split('\n')[0].slice(0, 120);
+  const r2 = classifyDesignText(firstLine);
+  if (r2) return r2;
+  return DESIGN_OTHER;
+}
+
+const DESIGNERS = [
+  'Валіахметова Оксана Андріївна',
+  'Шаптала Оксана Станіславівна',
+  'Дрижак Ірина Вадимівна',
+  'Павліченко Анна Олегівна',
+];
+const ADMINS = [
+  'Сумцов Кирило Юрійович',
+  'Берднікова Катерина Владиславівна',
+  'Кошевий Максим Русланович',
+  'Веретенников Сергій Миколайович',
+];
+const HOURS_PER_TASK_DESIGN = 2;
+
+function aggregateDesign(records) {
+  // dedup by task ID (in case of multi-file merges in the future)
+  const byId = new Map();
+  for (const r of records) {
+    const id = r['ИД задачи '] ?? r['ИД задачи'];
+    if (id != null && !byId.has(id)) byId.set(id, r);
+  }
+  const rows = [...byId.values()].map(r => ({
+    ...r,
+    _created: parseAnyDate(r['Дата создания']),
+    _completed: parseAnyDate(r['Завершена']),
+    _category: classifyDesignTask(r['Имя задачи'], r['Заметки']),
+    _assignees: (r[' Назначена пользователю'] || '').split(';').map(s => s.trim()).filter(Boolean),
+  })).filter(r => r._created);
+
+  const minDate = rows.reduce((a, r) => (a === null || r._created < a) ? r._created : a, null);
+  const maxDate = rows.reduce((a, r) => (a === null || r._created > a) ? r._created : a, null);
+  const months = monthRange(minDate, maxDate);
+  const capacityHours = capacityHoursByMonth(months, minDate, maxDate);
+
+  const monthlyCreated = {}, monthlyCompleted = {};
+  for (const m of months) { monthlyCreated[m] = 0; monthlyCompleted[m] = 0; }
+  for (const r of rows) {
+    monthlyCreated[monthKey(r._created)]++;
+    if (r._completed) {
+      const mk = monthKey(r._completed);
+      if (monthlyCompleted[mk] !== undefined) monthlyCompleted[mk]++;
+    }
+  }
+  const monthlySum = {};
+  for (const m of months) monthlySum[m] = monthlyCreated[m] + (monthlyCompleted[m] || 0);
+
+  const activeRows = rows.filter(r => r['Состояние'] !== 'Завершено');
+
+  function personMonthlyFor(name) {
+    const out = {}; for (const m of months) out[m] = 0;
+    for (const r of rows) if (r._assignees.includes(name)) out[monthKey(r._created)]++;
+    return out;
+  }
+  const allPeople = [...DESIGNERS, ...ADMINS];
+  const personMonthly = {};
+  for (const name of allPeople) personMonthly[name] = personMonthlyFor(name);
+
+  function hoursForPersonDesign(name) { return DESIGNERS.includes(name) ? HOURS_PER_TASK_DESIGN : null; }
+  const personInsights = buildPersonInsightsFor(months, personMonthly, allPeople, capacityHours, hoursForPersonDesign, maxDate);
+  const currentYear = Math.max(...months.map(m => +m.slice(0, 4)));
+  const byYear = buildYearlyViews(months, monthlySum, personMonthly, allPeople, capacityHours, hoursForPersonDesign, maxDate);
+
+  const activeCounts = {}, totalCounts = {};
+  for (const name of allPeople) { activeCounts[name] = 0; totalCounts[name] = 0; }
+  for (const r of rows) for (const a of r._assignees) if (totalCounts[a] !== undefined) totalCounts[a]++;
+  for (const r of activeRows) for (const a of r._assignees) if (activeCounts[a] !== undefined) activeCounts[a]++;
+  const designerTable = allPeople.map(name => ({ name, active: activeCounts[name], total: totalCounts[name] }))
+    .sort((a, b) => b.active - a.active || b.total - a.total);
+
+  const categoryDist = {};
+  for (const r of rows) categoryDist[r._category] = (categoryDist[r._category] || 0) + 1;
+
+  const priorityDist = {};
+  for (const r of rows) { const p = r['Приоритет']; priorityDist[p] = (priorityDist[p] || 0) + 1; }
+
+  const stateDist = {};
+  for (const r of rows) { const s = r['Состояние']; stateDist[s] = (stateDist[s] || 0) + 1; }
+
+  const segmentActive = {};
+  for (const r of activeRows) { const s = r['Сегмент']; segmentActive[s] = (segmentActive[s] || 0) + 1; }
+
+  const overdueCount = rows.filter(r => String(r['Просрочено']).toLowerCase() === 'true').length;
+
+  return {
+    meta: {
+      total_tasks: rows.length,
+      date_min: monthKey(minDate) + '-' + String(minDate.getUTCDate()).padStart(2, '0'),
+      date_max: monthKey(maxDate) + '-' + String(maxDate.getUTCDate()).padStart(2, '0'),
+      active_now: activeRows.length,
+      overdue_count: overdueCount,
+      overdue_rate: Math.round(overdueCount / rows.length * 10000) / 10000,
+    },
+    months, monthly_sum: monthlySum,
+    person_monthly: personMonthly, person_insights: personInsights,
+    current_year: currentYear, by_year: byYear,
+    designer_table: designerTable,
+    category_dist: categoryDist, priority_dist: priorityDist, state_dist: stateDist,
+    segment_active: segmentActive,
+  };
+}
+
+// ---------------- UX/UI (Jira) ----------------
+
+const UX_PEOPLE = [
+  'Кокін Михайло Юрійович',
+  'Шевченко Уляна Олексіївна',
+  "Кириченко Дар'я Костянтинівна",
+  'Куреня Богдан Володимирович',
+  'Філяк Мирон Петрович',
+];
+const UX_ACTIVE_STATUSES = new Set(['To Do', 'In Progress', 'On Review', 'On Hold']);
+
+function aggregateUX(records) {
+  const byKey = new Map();
+  for (const r of records) {
+    if (r['Project'] !== 'UX/UI') continue;
+    const key = r['Key'];
+    if (key && !byKey.has(key)) byKey.set(key, r);
+  }
+  const rows = [...byKey.values()].map(r => ({
+    ...r,
+    _created: parseAnyDate(r['Created']),
+    _timeSpent: typeof r['Time Spent'] === 'number' ? r['Time Spent'] : null,
+  })).filter(r => r._created);
+
+  const minDate = rows.reduce((a, r) => (a === null || r._created < a) ? r._created : a, null);
+  const maxDate = rows.reduce((a, r) => (a === null || r._created > a) ? r._created : a, null);
+  const months = monthRange(minDate, maxDate);
+  const capacityHours = capacityHoursByMonth(months, minDate, maxDate);
+
+  const timeSpentValues = rows.map(r => r._timeSpent).filter(v => v !== null);
+  const avgHours = Math.round(timeSpentValues.reduce((a, b) => a + b, 0) / timeSpentValues.length * 10) / 10;
+
+  const monthlyCreated = {};
+  for (const m of months) monthlyCreated[m] = 0;
+  for (const r of rows) monthlyCreated[monthKey(r._created)]++;
+
+  const activeRows = rows.filter(r => UX_ACTIVE_STATUSES.has(r['Status']));
+
+  const peopleRows = rows.filter(r => UX_PEOPLE.includes(r['Assignee']));
+
+  function personMonthlyFor(name) {
+    const out = {}; for (const m of months) out[m] = 0;
+    for (const r of peopleRows) if (r['Assignee'] === name) out[monthKey(r._created)]++;
+    return out;
+  }
+  const personMonthly = {};
+  for (const name of UX_PEOPLE) personMonthly[name] = personMonthlyFor(name);
+
+  function hoursForPersonUX() { return avgHours; }
+  const personInsights = buildPersonInsightsFor(months, personMonthly, UX_PEOPLE, capacityHours, hoursForPersonUX, maxDate);
+  const currentYear = Math.max(...months.map(m => +m.slice(0, 4)));
+  const byYear = buildYearlyViews(months, monthlyCreated, personMonthly, UX_PEOPLE, capacityHours, hoursForPersonUX, maxDate);
+
+  const activeCounts = {}, totalCounts = {};
+  for (const name of UX_PEOPLE) { activeCounts[name] = 0; totalCounts[name] = 0; }
+  for (const r of peopleRows) totalCounts[r['Assignee']]++;
+  for (const r of peopleRows) if (UX_ACTIVE_STATUSES.has(r['Status'])) activeCounts[r['Assignee']]++;
+  const designerTable = UX_PEOPLE.map(name => ({ name, active: activeCounts[name], total: totalCounts[name] }))
+    .sort((a, b) => b.active - a.active || b.total - a.total);
+
+  const statusDist = {}, activeStatusDist = {}, priorityDist = {};
+  for (const r of rows) {
+    statusDist[r['Status']] = (statusDist[r['Status']] || 0) + 1;
+    if (UX_ACTIVE_STATUSES.has(r['Status'])) activeStatusDist[r['Status']] = (activeStatusDist[r['Status']] || 0) + 1;
+    priorityDist[r['P']] = (priorityDist[r['P']] || 0) + 1;
+  }
+
+  return {
+    meta: {
+      total_tasks: rows.length,
+      date_min: monthKey(minDate) + '-' + String(minDate.getUTCDate()).padStart(2, '0'),
+      date_max: monthKey(maxDate) + '-' + String(maxDate.getUTCDate()).padStart(2, '0'),
+      active_now: activeRows.length,
+      avg_hours_per_task: avgHours,
+      avg_hours_n: timeSpentValues.length,
+    },
+    months, capacity_hours_monthly: capacityHours, monthly_sum: monthlyCreated,
+    person_monthly: personMonthly, person_insights: personInsights,
+    current_year: currentYear, by_year: byYear,
+    designer_table: designerTable,
+    status_dist: statusDist, active_status_dist: activeStatusDist, priority_dist: priorityDist,
+  };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    parseAnyDate, monthKey, businessDaysBetween, monthRange, capacityHoursByMonth,
+    buildPersonInsightsFor, buildYearlyViews,
+    classifyDesignTask, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
+  };
+}
+
+</script>
+<script>
+(function(){
+  const DATA = JSON.parse(document.getElementById('data-json').textContent);
+  const DATA_UX = JSON.parse(document.getElementById('data-json-ux').textContent);
+  const root = document.currentScript.closest('.viz-root') || document.querySelector('.viz-root');
+  const cs = getComputedStyle(root);
+  const cvar = (name) => cs.getPropertyValue(name).trim();
+  const UX_MONTH_NAMES = {
+    '01':'Січ','02':'Лют','03':'Бер','04':'Кві','05':'Тра','06':'Чер',
+    '07':'Лип','08':'Сер','09':'Вер','10':'Жов','11':'Лис','12':'Гру'
+  };
+  function buildMonthLabels(months) {
+    const labels = {};
+    months.forEach(m => {
+      const [y, mo] = m.split('-');
+      labels[m] = `${UX_MONTH_NAMES[mo]} ${y.slice(2)}`;
+    });
+    return labels;
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  function makeTooltip(container) {
+    const tip = document.createElement('div');
+    tip.className = 'tooltip';
+    container.appendChild(tip);
+    return {
+      show(x, y, html) { tip.innerHTML = html; tip.style.left = x + 'px'; tip.style.top = y + 'px'; tip.style.opacity = '1'; },
+      hide() { tip.style.opacity = '0'; }
+    };
+  }
+
+  // ---------- KPI tiles ----------
+  function renderKpiRow(targetId, kpis) {
+    document.getElementById(targetId).innerHTML = kpis.map(k => `
+      <div class="kpi-tile">
+        <div class="label">${k.label}</div>
+        <div class="value">${k.value}</div>
+        <div class="sub">${k.sub}</div>
+      </div>`).join('');
+  }
+
+  // ---------- Sum chart (single series, full-width line) ----------
+  function renderSumChart(wrapId, months, valuesByMonth, monthLabels, tooltipSuffix) {
+    const wrap = document.getElementById(wrapId);
+    const w = 1100, h = 260;
+    const padL = 46, padR = 24, padT = 30, padB = 30;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const values = months.map(m => valuesByMonth[m] || 0);
+    const maxV = Math.ceil(Math.max(...values) / 200) * 200 || 1;
+    const xStep = plotW / (months.length - 1);
+    const yScale = v => padT + plotH - (v / maxV) * plotH;
+    const xScale = i => padL + i * xStep;
+
+    const gridLines = [0,0.25,0.5,0.75,1].map(f => {
+      const y = padT + plotH * (1 - f);
+      const val = Math.round(maxV * f);
+      return `<line class="grid-line" x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}"/>
+              <text x="${padL-8}" y="${y+3}" text-anchor="end">${val}</text>`;
+    }).join('');
+
+    const linePath = values.map((v,i) => `${i===0?'M':'L'}${xScale(i)},${yScale(v)}`).join(' ');
+    const areaPath = `${linePath} L${xScale(values.length-1)},${padT+plotH} L${xScale(0)},${padT+plotH} Z`;
+    const points = values.map((v,i) => `
+      <circle data-i="${i}" cx="${xScale(i)}" cy="${yScale(v)}" r="4" fill="${cvar('--brand-green')}"/>
+      <text x="${xScale(i)}" y="${yScale(v)-12}" text-anchor="middle" style="font-weight:600; fill:var(--text-primary)">${v}</text>`).join('');
+    const xLabels = months.map((m,i) => `<text x="${xScale(i)}" y="${h-8}" text-anchor="middle">${monthLabels[m]||m}</text>`).join('');
+
+    const svg = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block; width:100%; height:auto">
+      ${gridLines}
+      <line class="axis-line" x1="${padL}" x2="${w-padR}" y1="${padT+plotH}" y2="${padT+plotH}"/>
+      <path d="${areaPath}" fill="${cvar('--brand-green')}" opacity="0.12" stroke="none"/>
+      <path d="${linePath}" fill="none" stroke="${cvar('--brand-green')}" stroke-width="3"/>
+      ${points}
+      ${xLabels}
+    </svg>`;
+    wrap.innerHTML = svg;
+    const tip = makeTooltip(wrap);
+    wrap.querySelectorAll('circle').forEach(c => {
+      c.style.cursor = 'pointer';
+      c.addEventListener('mouseenter', () => {
+        const i = +c.dataset.i, m = months[i];
+        const rect = wrap.getBoundingClientRect();
+        const cx = (+c.getAttribute('cx')) / w * rect.width;
+        const cy = (+c.getAttribute('cy')) / h * rect.height;
+        tip.show(cx, cy, `<b>${monthLabels[m]||m}</b>: ${values[i]}${tooltipSuffix}`);
+      });
+      c.addEventListener('mouseleave', () => tip.hide());
+    });
+  }
+
+  // ---------- Stage chart ----------
+  function renderStageChart(targetId, distObj, nameWidth, colors) {
+    const entries = Object.entries(distObj).sort((a,b) => b[1]-a[1]);
+    const max = Math.max(...entries.map(e => e[1]));
+    const html = entries.map(([name, v], i) => `
+      <div class="bar-row">
+        <div class="name" style="width:${nameWidth}px">${name}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/max*100).toFixed(1)}%; background:${colors[i % colors.length]}"></div></div>
+        <div class="bar-val">${v}</div>
+      </div>`).join('');
+    document.getElementById(targetId).innerHTML = html;
+  }
+  const stageColors = [cvar('--series-5'), cvar('--series-8'), cvar('--brand-green'), cvar('--series-6'), cvar('--series-2'), cvar('--series-3')];
+
+  // ---------- Per-person monthly mini charts ----------
+  function renderPeopleGrid(gridId, names, personMonthly, personInsights, months, monthLabels) {
+    const grid = document.getElementById(gridId);
+    const cardsHtml = names.map((name) => {
+      const monthly = personMonthly[name];
+      const ins = personInsights[name];
+      const values = months.map(m => monthly[m] || 0);
+      const max = Math.max(...values, 1);
+      const w = 240, h = 70, padB = 14, bw = w / months.length, barW = bw * 0.6;
+      const bars = values.map((v,i) => {
+        const bh = (v/max) * (h-padB);
+        const x = i*bw + (bw-barW)/2, y = h - padB - bh;
+        const isLast = i === months.length - 1;
+        return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(bh,1)}" rx="2"
+                  fill="${isLast ? cvar('--brand-orange') : cvar('--brand-green')}" opacity="${isLast ? '0.85':'1'}"
+                  data-m="${months[i]}" data-v="${v}"/>`;
+      }).join('');
+      const labels = months.map((m,i) => `<text x="${i*bw+bw/2}" y="${h-2}" text-anchor="middle" style="font-size:8.5px">${(monthLabels[m]||m).slice(0,1)}</text>`).join('');
+
+      const deltaProj = (ins.last_value_projected !== undefined ? ins.last_value_projected : ins.last_value) - ins.prev_value;
+      const deltaProjPct = ins.prev_value ? Math.round(deltaProj/ins.prev_value*100) : null;
+      const deltaCls = deltaProj >= 0 ? 'delta-up' : 'delta-down';
+      const deltaSign = deltaProj > 0 ? '+' : '';
+      const bestLabel = monthLabels[ins.best_month] || ins.best_month;
+      const lastLabel = monthLabels[ins.last_month] || ins.last_month;
+      const prevLabel = monthLabels[ins.prev_month] || ins.prev_month;
+
+      let loadBlock;
+      if (ins.workload_pct_monthly) {
+        const chips = months.map(m => {
+          const pct = ins.workload_pct_monthly[m];
+          const color = pct > 100 ? cvar('--status-critical') : (pct >= 70 ? cvar('--status-warning') : cvar('--status-good'));
+          return `<div class="load-chip" style="background:${color}" title="${monthLabels[m]||m}: ${pct}%">${Math.round(pct)}%</div>`;
+        }).join('');
+        loadBlock = `
+        <div class="load-row">${chips}</div>
+        <div class="load-legend"><span class="dot" style="background:${cvar('--status-good')}"></span>&lt;70%
+          &nbsp;<span class="dot" style="background:${cvar('--status-warning')}"></span>70–100%
+          &nbsp;<span class="dot" style="background:${cvar('--status-critical')}"></span>&gt;100%</div>`;
+      } else {
+        loadBlock = `<div class="no-load-calc">Розрахунок завантаженості (%) для цієї ролі буде додано окремо</div>`;
+      }
+
+      const lastValueDisplay = ins.last_value_projected !== undefined
+        ? `<b>${ins.last_value}</b> → ~${ins.last_value_projected}`
+        : `<b>${ins.last_value}</b>`;
+
+      return `
+      <div class="person-card">
+        <div class="p-name">${name}</div>
+        <div class="chart-wrap" data-name="${name}"><svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${bars}${labels}</svg></div>
+        <div class="p-stats">
+          ${lastLabel}: ${lastValueDisplay}<br>
+          МоМ vs ${prevLabel}: <span class="${deltaCls}">${deltaSign}${deltaProj}</span><br>
+          Найкращий місяць: <span class="badge-best">${bestLabel} · ${ins.best_value}</span>
+        </div>
+        ${loadBlock}
+      </div>`;
+    }).join('');
+    grid.innerHTML = cardsHtml;
+
+    grid.querySelectorAll('.chart-wrap').forEach(wrap => {
+      const tip = makeTooltip(wrap);
+      wrap.querySelectorAll('rect').forEach(r => {
+        r.style.cursor = 'pointer';
+        r.addEventListener('mouseenter', () => {
+          const rect = wrap.getBoundingClientRect();
+          const x = (+r.getAttribute('x') + (+r.getAttribute('width'))/2) / 240 * rect.width;
+          const y = (+r.getAttribute('y')) / 70 * rect.height;
+          const m = r.dataset.m;
+          tip.show(x, y, `<b>${monthLabels[m]||m}</b>: ${r.dataset.v}`);
+        });
+        r.addEventListener('mouseleave', () => tip.hide());
+      });
+    });
+  }
+
+  // ---------- Designer table ----------
+  function renderDesignerTable(tableId, rows) {
+    const thead = `<thead><tr><th>Ім'я</th><th class="num">Активних зараз</th><th class="num">Всього за період</th></tr></thead>`;
+    const tbody = '<tbody>' + rows.map(r => `<tr><td>${r.name}</td><td class="num">${r.active}</td><td class="num">${r.total}</td></tr>`).join('') + '</tbody>';
+    document.getElementById(tableId).innerHTML = thead + tbody;
+  }
+
+  // ---------- Category chart ----------
+  function renderCategoryChart(targetId, categoryDist) {
+    const entries = Object.entries(categoryDist).sort((a,b) => b[1]-a[1]);
+    const total = entries.reduce((s,e) => s+e[1], 0);
+    const max = Math.max(...entries.map(e => e[1]));
+    const palette = [cvar('--series-1'), cvar('--series-2'), cvar('--series-3'), cvar('--series-4'), cvar('--series-5'), cvar('--series-6'), cvar('--series-7'), cvar('--series-8')];
+    let colorIdx = 0;
+    const html = entries.map(([name, v]) => {
+      let color, dashed = false;
+      if (name.startsWith('Інше')) { color = cvar('--series-other'); dashed = true; }
+      else if (colorIdx < 8) { color = palette[colorIdx++]; }
+      else { color = cvar('--series-minor'); }
+      const pct = (v/total*100).toFixed(1);
+      return `
+      <div class="bar-row">
+        <div class="name">${name}</div>
+        <div class="bar-track"><div class="bar-fill${dashed?' dashed':''}" style="width:${(v/max*100).toFixed(1)}%; background:${color}"></div></div>
+        <div class="bar-val">${v} (${pct}%)</div>
+      </div>`;
+    }).join('');
+    document.getElementById(targetId).innerHTML = html;
+  }
+
+  // ---------- AI insights ----------
+  function renderInsights(targetId, items) {
+    const tagLabel = { watch: 'На перевірку', good: 'Все гаразд', idea: 'Ідея' };
+    const tagClass = { watch: 'tag-watch', good: 'tag-good', idea: 'tag-idea' };
+    document.getElementById(targetId).innerHTML = items.map((it, i) => `
+      <li>
+        <span class="idx">${i+1}</span>
+        <span><span class="tag ${tagClass[it.tag]}">${tagLabel[it.tag]}</span>${it.html}</span>
+      </li>`).join('');
+  }
+
+  // ================= Tab render entry points (called on load AND after a data upload) =================
+
+  // Wires a <select> of years to a render callback. Defaults to `defaultYear`, calls
+  // `onSelect(year)` immediately and again on every change.
+  function wireYearSelect(selectId, years, defaultYear, onSelect) {
+    const el = document.getElementById(selectId);
+    if (!el) return;
+    el.innerHTML = years.map(y => `<option value="${y}"${y === String(defaultYear) ? ' selected' : ''}>${y}</option>`).join('');
+    el.onchange = () => onSelect(el.value);
+    onSelect(String(defaultYear));
+  }
+
+  function renderDesignTab(data) {
+    const months = data.months;
+    const monthLabels = buildMonthLabels(months);
+    const avgPerMonth = Math.round(data.meta.total_tasks / months.length);
+    renderKpiRow('kpiRow', [
+      { label: 'Всього задач за період', value: data.meta.total_tasks.toLocaleString('uk-UA'), sub: `${months.length} міс. (${data.meta.date_min}–${data.meta.date_max})` },
+      { label: 'Активних зараз', value: data.meta.active_now, sub: 'не завершені задачі' },
+      { label: 'Прострочено', value: data.meta.overdue_count, sub: (data.meta.overdue_rate*100).toFixed(1) + '% від усіх' },
+      { label: 'Середньо задач/міс', value: avgPerMonth, sub: 'перший і останній місяць можуть бути неповними' },
+    ]);
+    renderStageChart('stageChart', data.segment_active, 170, stageColors);
+    renderDesignerTable('designerTable', data.designer_table);
+    renderCategoryChart('categoryChart', data.category_dist);
+
+    const years = Object.keys(data.by_year).sort();
+    wireYearSelect('yearSelectDesignSum', years, data.current_year, (year) => {
+      const yd = data.by_year[year];
+      renderSumChart('sumChartWrap', yd.months, yd.monthly_sum, buildMonthLabels(yd.months), ' (створено+завершено)');
+    });
+    wireYearSelect('yearSelectDesignWorkload', years, data.current_year, (year) => {
+      const yd = data.by_year[year];
+      renderPeopleGrid('peopleGridDesigners', DESIGNERS, yd.person_monthly, yd.person_insights, yd.months, buildMonthLabels(yd.months));
+    });
+    wireYearSelect('yearSelectDesignAdmins', years, data.current_year, (year) => {
+      const yd = data.by_year[year];
+      renderPeopleGrid('peopleGridAdmins', ADMINS, yd.person_monthly, yd.person_insights, yd.months, buildMonthLabels(yd.months));
+    });
+  }
+
+  function renderUXTab(data) {
+    const months = data.months;
+    const avgPerMonth = Math.round(data.meta.total_tasks / months.length);
+    renderKpiRow('kpiRowUx', [
+      { label: 'Всього задач за період', value: data.meta.total_tasks.toLocaleString('uk-UA'), sub: `${months.length} міс. (${data.meta.date_min}–${data.meta.date_max})` },
+      { label: 'Активних зараз', value: data.meta.active_now, sub: 'To Do / In Progress / On Review / On Hold' },
+      { label: 'Прострочено', value: '—', sub: 'дедлайни (Due) майже не заповнені' },
+      { label: 'Середньо задач/міс', value: avgPerMonth, sub: `${months[0]}–${months[months.length-1]}` },
+    ]);
+    renderStageChart('stageChartUx', data.active_status_dist, 170, stageColors);
+    renderDesignerTable('designerTableUx', data.designer_table);
+
+    const years = Object.keys(data.by_year).sort();
+    wireYearSelect('yearSelectUxSum', years, data.current_year, (year) => {
+      const yd = data.by_year[year];
+      renderSumChart('sumChartWrapUx', yd.months, yd.monthly_sum, buildMonthLabels(yd.months), ' задач створено');
+    });
+    wireYearSelect('yearSelectUxWorkload', years, data.current_year, (year) => {
+      const yd = data.by_year[year];
+      renderPeopleGrid('peopleGridUx', UX_PEOPLE, yd.person_monthly, yd.person_insights, yd.months, buildMonthLabels(yd.months));
+    });
+  }
+
+  renderDesignTab(DATA);
+  renderUXTab(DATA_UX);
+
+  renderInsights('aiInsights', [
+    { tag: 'watch', html: `<b>Пік навантаження — березень 2026</b> (700 нових / 669 завершених задач за місяць). З березня по липень обсяг стабільно знижується — варто перевірити, чи це сезонний спад запитів, чи менше кампаній заплановано на літо.` },
+    { tag: 'good', html: `<b>Дедлайни тримають добре:</b> лише 1.1% задач (38 з 3354) прострочені за весь період — дисципліна виконання висока, це не проблемна зона.` },
+    { tag: 'watch', html: `<b>Навантаження розподілене нерівномірно:</b> Веретенников Сергій і Кошевий Максим разом ведуть 52.9% всього обсягу серед 8 співробітників (1199 і 960 задач відповідно) — решта 6 людей ділять залишок.` },
+    { tag: 'watch', html: `<b>Черга зараз найбільша у Шаптали Оксани</b> — 19 з 62 активних задач (30.6%), майже вдвічі більше за наступного за завантаженістю (Кошевий Максим, 12). Варто перевірити, чи не перерозподілити частину черги.` },
+    { tag: 'idea', html: `<b>«Інше / не визначено» — найбільша «категорія»</b> (19.8%, 665 задач), хоча це не реальний тип роботи: назви на кшталт «Креатив Х» чи «Нічний ЦІНОкач» не містять маркерів типу. Короткий тег при постановці задачі підвищить точність цієї аналітики.` },
+    { tag: 'idea', html: `<b>«Картки товару» як окрема категорія майже не зустрічається</b> (8 задач, 0.2%) — схоже, такі задачі зазвичай оформлюють як «Категорії» чи «Сайт + додаток». Варто підтвердити, чи очікувано це, чи категорію варто об'єднати.` },
+  ]);
+
+  renderInsights('aiInsightsUx', [
+    { tag: 'watch', html: `<b>Черга практично дорівнює виконаному:</b> 112 з 236 задач (47.5%) ще активні, і 42.9% з них (48 задач) стоять «On Hold» — майже половина черги призупинена. Варто перевірити причини паузи й чи є план їх розморозити.` },
+    { tag: 'watch', html: `<b>Обсяг задач різко зріс у 2026:</b> у 2025 було 1–11 задач/міс, у 2026 — вже 9–41 (пік — червень, 41 задача). Це може бути реальне зростання напрямку UX/UI, а може — те, що частину задач 2025 року просто не заносили в Jira системно.` },
+    { tag: 'watch', html: `<b>Найбільша черга — у Кокіна Михайла:</b> 32 з 112 активних (28.6%), майже вдвічі більше за наступного за завантаженістю (Куреня Богдан, 22).` },
+    { tag: 'idea', html: `<b>% завантаженості — груба оцінка:</b> реальний Time Spent є лише у 72 з 236 задач (30.5%), і розкид великий — від 2 до 152 год. Середнє (22.7 год) — це наближення; точність підвищиться, якщо Time Spent проставлятимуть частіше.` },
+    { tag: 'idea', html: `<b>Типу роботи в даних немає:</b> без нього не видно, на що йде основний час команди (дослідження, флоу, прототипування тощо). Якщо з'явиться поле/лейбл або власна класифікація — додам розподіл, як у DESIGN & SUPPORT.` },
+  ]);
+
+  // ================= Data upload: parse .xlsx entirely in the browser, no data leaves it =================
+
+  async function inflateRawBrowser(rawArrayBuffer) {
+    const ds = new DecompressionStream('deflate-raw');
+    const stream = new Blob([rawArrayBuffer]).stream().pipeThrough(ds);
+    return await new Response(stream).arrayBuffer();
+  }
+
+  function checkBrowserSupport() {
+    if (typeof DecompressionStream === 'undefined') {
+      alert('Цей інструмент потребує сучасного браузера (підтримка DecompressionStream) — оновіть Chrome, Edge, Firefox або Safari.');
+      return false;
+    }
+    return true;
+  }
+
+  function setupDropzone(zoneId, inputId, statusId, onFiles) {
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+    const status = document.getElementById(statusId);
+    if (!zone) return;
+
+    zone.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => { handleFiles(input.files); input.value = ''; });
+    ['dragover', 'dragenter'].forEach(evt => zone.addEventListener(evt, e => {
+      e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over');
+    }));
+    ['dragleave', 'drop'].forEach(evt => zone.addEventListener(evt, e => {
+      e.preventDefault(); e.stopPropagation(); zone.classList.remove('drag-over');
+    }));
+    zone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+
+    async function handleFiles(fileList) {
+      const files = [...fileList].filter(f => f.name.toLowerCase().endsWith('.xlsx'));
+      if (!files.length) {
+        status.textContent = 'Не знайдено жодного .xlsx файлу серед завантажених.';
+        status.className = 'upload-status upload-error';
+        return;
+      }
+      if (!checkBrowserSupport()) return;
+      status.textContent = `Обробка ${files.length} файл(ів)...`;
+      status.className = 'upload-status';
+      try {
+        await onFiles(files);
+      } catch (err) {
+        console.error(err);
+        status.textContent = 'Помилка обробки: ' + err.message;
+        status.className = 'upload-status upload-error';
+      }
+    }
+  }
+
+  setupDropzone('dropzoneDesign', 'fileInputDesign', 'uploadStatusDesign', async (files) => {
+    let allRecords = [];
+    for (const file of files) {
+      const ab = await file.arrayBuffer();
+      const sheets = await parseXlsx(ab, ['Консолидированные данные'], inflateRawBrowser);
+      const rows = sheets['Консолидированные данные'];
+      if (!rows) throw new Error(`У файлі «${file.name}» немає аркуша «Консолидированные данные»`);
+      allRecords = allRecords.concat(rowsToRecords(rows));
+    }
+    const data = aggregateDesign(allRecords);
+    renderDesignTab(data);
+    const status = document.getElementById('uploadStatusDesign');
+    status.textContent = `Завантажено: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач із ${files.length} файл(ів) · ${data.meta.date_min}–${data.meta.date_max}`;
+    status.className = 'upload-status upload-ok';
+  });
+
+  setupDropzone('dropzoneUx', 'fileInputUx', 'uploadStatusUx', async (files) => {
+    let allRecords = [];
+    for (const file of files) {
+      const ab = await file.arrayBuffer();
+      const sheets = await parseXlsx(ab, ['Issue Navigator'], inflateRawBrowser);
+      const rows = sheets['Issue Navigator'];
+      if (!rows) throw new Error(`У файлі «${file.name}» немає аркуша «Issue Navigator»`);
+      allRecords = allRecords.concat(rowsToRecords(rows));
+    }
+    const data = aggregateUX(allRecords);
+    renderUXTab(data);
+    const status = document.getElementById('uploadStatusUx');
+    status.textContent = `Завантажено: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач із ${files.length} файл(ів) · ${data.meta.date_min}–${data.meta.date_max}`;
+    status.className = 'upload-status upload-ok';
+  });
+
+})();
+</script>
