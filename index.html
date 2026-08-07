@@ -303,7 +303,7 @@
 
     <div class="dropzone" id="dropzoneDesign">
       <div class="dz-title">📂 Оновити дані DESIGN &amp; SUPPORT</div>
-      <div class="dz-sub">Перетягніть Planner-експорт(и) (.xlsx) сюди або натисніть, щоб обрати — можна кілька файлів одразу. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
+      <div class="dz-sub">Перетягніть Planner-експорт(и) (.xlsx) сюди або натисніть, щоб обрати — можна кілька файлів одразу. Кожне завантаження додається до вже накопичених задач (за ID) — вужчий за період файл не стирає раніше завантажені місяці. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
       <input type="file" id="fileInputDesign" accept=".xlsx" multiple hidden>
     </div>
     <div class="upload-status" id="uploadStatusDesign"></div>
@@ -402,7 +402,7 @@
 
     <div class="dropzone" id="dropzoneUx">
       <div class="dz-title">📂 Оновити дані UX/UI</div>
-      <div class="dz-sub">Перетягніть Jira-експорти «Better Excel (All fields)» (.xlsx) сюди або натисніть, щоб обрати — можна кілька файлів одразу (наприклад, якщо Jira вивантажує частинами). Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
+      <div class="dz-sub">Перетягніть Jira-експорти «Better Excel (All fields)» (.xlsx) сюди або натисніть, щоб обрати — можна кілька файлів одразу (наприклад, якщо Jira вивантажує частинами). Кожне завантаження додається до вже накопичених задач (за Key) — вужчий за період файл не стирає раніше завантажені місяці. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
       <input type="file" id="fileInputUx" accept=".xlsx" multiple hidden>
     </div>
     <div class="upload-status" id="uploadStatusUx"></div>
@@ -467,9 +467,9 @@
   <div class="tab-panel" id="t2">
 
     <div class="dropzone" id="dropzoneProjects">
-      <div class="dz-title">📂 Завантажити проєкти</div>
-      <div class="dz-sub">Перетягніть сюди JSON-експорт(и) Trello-дошки або натисніть, щоб обрати — кожен файл = один проєкт, можна кілька одразу. Обробка відбувається у вашому браузері, файли нікуди не надсилаються. Наразі повністю підтримується тільки Trello (.json) — якщо якийсь проєкт ведеться в іншій системі (CSV/Excel тощо), надішліть мені реальний файл-приклад, і я додам розпізнавання під його структуру.</div>
-      <input type="file" id="fileInputProjects" accept=".json" multiple hidden>
+      <div class="dz-title">📂 Завантажити / оновити проєкти</div>
+      <div class="dz-sub">Перетягніть сюди файл(и) проєкту — JSON (Trello), CSV або Excel — або натисніть, щоб обрати; можна кілька одразу. Кожне завантаження додається до вже накопичених даних (новий файл того ж проєкту оновлює й доповнює його, а не замінює). Trello JSON розпізнається точно (лейбли/списки/історія дій); CSV та Excel — за назвами колонок (Name/Status/Labels тощо) евристично, без прогнозу швидкості (немає історії переміщень) — перевірте результат і напишіть, якщо щось розпізналось не так. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
+      <input type="file" id="fileInputProjects" accept=".json,.csv,.xlsx" multiple hidden>
     </div>
     <div class="upload-status" id="uploadStatusProjects"></div>
 
@@ -1144,6 +1144,85 @@ function classifyStream(labelNames) {
   return 'Управління товарами';
 }
 
+// ---- Generic (non-Trello) project import: CSV / Excel ----
+// There is no real sample file for a non-Trello project source yet, so this is a best-effort
+// heuristic column-name matcher, not a calibrated parser like the Planner/Jira ones. It has no
+// action history (no velocity/forecast) and no real stream taxonomy (everything not matching a
+// known stream label falls into "Управління товарами") — both call out as such in the UI.
+// Verify results against a real file and refine once one exists, same as Planner/Jira were.
+function parseCsvText(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (c === '\r') { /* skip — \n follows in CRLF */ }
+    else field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const headers = rows[0];
+  return rows.slice(1)
+    .filter(r => r.some(v => v !== ''))
+    .map(r => { const obj = {}; headers.forEach((h, i) => obj[h] = r[i] ?? ''); return obj; });
+}
+
+function findColumn(headers, candidates) {
+  const lower = headers.map(h => h.toLowerCase().trim());
+  for (const cand of candidates) {
+    const idx = lower.indexOf(cand);
+    if (idx >= 0) return headers[idx];
+  }
+  return null;
+}
+
+// Turns generic {header: value} rows (from CSV or an unknown Excel sheet) into the same shape
+// aggregateProject() expects from a Trello export, so the rest of the pipeline is unchanged.
+function genericRowsToTrelloShape(rows, sourceName) {
+  if (!rows.length) throw new Error(`«${sourceName}»: файл порожній або без розпізнаних рядків.`);
+  const headers = Object.keys(rows[0]);
+  const nameCol = findColumn(headers, ['name', 'title', 'task', 'summary', 'задача', 'назва', 'название']);
+  const statusCol = findColumn(headers, ['status', 'list', 'stage', 'column', 'статус', 'список', 'стадія', 'колонка']);
+  const labelsCol = findColumn(headers, ['labels', 'label', 'tags', 'tag', 'лейбл', 'лейбли', 'мітка', 'мітки', 'метка', 'метки']);
+  const idCol = findColumn(headers, ['id', 'card id', 'key', 'ід', 'номер']);
+  if (!nameCol) {
+    throw new Error(`«${sourceName}»: не вдалося визначити колонку з назвою задачі (очікую заголовок на кшталт Name/Title/Задача). Знайдені колонки: ${headers.join(', ')}`);
+  }
+
+  const listIdByName = {};
+  const labelIdByName = {};
+  const cards = rows.map((r, i) => {
+    const statusName = (statusCol ? String(r[statusCol] ?? '').trim() : '') || 'NEW';
+    if (!(statusName in listIdByName)) listIdByName[statusName] = 'list_' + Object.keys(listIdByName).length;
+    const rawLabels = labelsCol ? String(r[labelsCol] ?? '') : '';
+    const idLabels = rawLabels.split(/[;,]/).map(s => s.trim()).filter(Boolean).map(name => {
+      if (!(name in labelIdByName)) labelIdByName[name] = 'label_' + Object.keys(labelIdByName).length;
+      return labelIdByName[name];
+    });
+    return {
+      id: idCol && r[idCol] !== '' ? String(r[idCol]) : `${sourceName}__row${i}`,
+      name: String(r[nameCol] ?? '').trim() || `(без назви, рядок ${i + 1})`,
+      idList: listIdByName[statusName],
+      idLabels,
+      closed: false,
+    };
+  });
+
+  return {
+    id: sourceName,
+    name: sourceName,
+    cards,
+    lists: Object.entries(listIdByName).map(([name, id]) => ({ id, name })),
+    labels: Object.entries(labelIdByName).map(([name, id]) => ({ id, name })),
+    actions: [], // flat CSV/Excel exports carry no move history → forecast reports "insufficient data"
+  };
+}
+
 function emptyBucketCounts() {
   return { total: 0, done: 0, in_progress: 0, new: 0, blocked: 0, on_hold: 0 };
 }
@@ -1273,6 +1352,7 @@ if (typeof module !== 'undefined') {
     classifyDesignTask, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
     classifyStream, aggregateProject, computeForecast, computeProjectStatus, yearEndDeadline,
     bucketForListName, isOnHoldListName, isBlockerLabel,
+    parseCsvText, genericRowsToTrelloShape,
   };
 }
 
@@ -1284,6 +1364,60 @@ if (typeof module !== 'undefined') {
   const root = document.currentScript.closest('.viz-root') || document.querySelector('.viz-root');
   const cs = getComputedStyle(root);
   const cvar = (name) => cs.getPropertyValue(name).trim();
+
+  // ================= Persistence: accumulate uploads across sessions (localStorage) =================
+  // Reliable only when this page is served from a real origin (GitHub Pages) — under file://,
+  // browsers vary in how they scope localStorage for local files, so accumulation may not
+  // survive a reload there. Each upload MERGES into what's stored (new data wins per key,
+  // anything not present in the new file is kept) rather than replacing it, so a narrower
+  // re-export (e.g. this month's slice only) adds to history instead of erasing earlier months.
+  const LS_KEY_DESIGN = 'exec_dashboard_design_rows_v1';
+  const LS_KEY_UX = 'exec_dashboard_ux_rows_v1';
+  const LS_KEY_PROJECTS = 'exec_dashboard_projects_v1';
+
+  function lsGet(key) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+    catch (e) { console.error('localStorage read failed for', key, e); return null; }
+  }
+  function lsSet(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { console.error('localStorage write failed for', key, e); return false; }
+  }
+
+  function loadDesignRows() { return lsGet(LS_KEY_DESIGN) || {}; }
+  function saveDesignRows(rowsById) { return lsSet(LS_KEY_DESIGN, rowsById); }
+  function loadUxRows() { return lsGet(LS_KEY_UX) || {}; }
+  function saveUxRows(rowsByKey) { return lsSet(LS_KEY_UX, rowsByKey); }
+  function loadProjectBoards() { return lsGet(LS_KEY_PROJECTS) || {}; }
+  function saveProjectBoards(boards) { return lsSet(LS_KEY_PROJECTS, boards); }
+
+  // Merges one freshly-parsed Trello-shaped object (real Trello export, or a CSV/Excel file
+  // mapped into the same shape) into the persisted per-board store, keyed by board id so a
+  // later re-upload of the same board updates in place instead of appearing as a new project.
+  function mergeBoardIntoStore(store, json) {
+    const boardId = json.id || json.name;
+    const existing = store[boardId] || { name: json.name, cardsById: {}, labelsById: {}, listsById: {}, actionsById: {} };
+    existing.name = json.name || existing.name;
+    for (const l of json.labels || []) existing.labelsById[l.id] = l.name;
+    for (const l of json.lists || []) existing.listsById[l.id] = l.name;
+    for (const c of json.cards || []) existing.cardsById[c.id] = c;
+    for (const a of json.actions || []) if (a.id) existing.actionsById[a.id] = a;
+    store[boardId] = existing;
+    return boardId;
+  }
+  function boardStoreToTrelloJson(existing, boardId) {
+    return {
+      id: boardId,
+      name: existing.name,
+      cards: Object.values(existing.cardsById),
+      labels: Object.entries(existing.labelsById).map(([id, name]) => ({ id, name })),
+      lists: Object.entries(existing.listsById).map(([id, name]) => ({ id, name })),
+      actions: Object.values(existing.actionsById),
+    };
+  }
+  function allProjectsFromStore(store) {
+    return Object.entries(store).map(([boardId, existing]) => aggregateProject(boardStoreToTrelloJson(existing, boardId), Date.now()));
+  }
   const UX_MONTH_NAMES = {
     '01':'Січ','02':'Лют','03':'Бер','04':'Кві','05':'Тра','06':'Чер',
     '07':'Лип','08':'Сер','09':'Вер','10':'Жов','11':'Лис','12':'Гру'
@@ -1753,10 +1887,18 @@ if (typeof module !== 'undefined') {
     return items;
   }
 
-  renderProjectsTab([]);
+  // Initial render: prefer whatever's accumulated in localStorage over the baked-in demo data.
+  // The baked-in DATA/DATA_UX are already-aggregated (not raw rows), so they can't themselves be
+  // merged into — the first real upload in a given browser replaces the demo view and becomes
+  // the seed that later uploads accumulate onto from then on.
+  let projectsState = allProjectsFromStore(loadProjectBoards());
+  renderProjectsTab(projectsState);
 
-  renderDesignTab(DATA);
-  renderUXTab(DATA_UX);
+  const savedDesignRows = loadDesignRows();
+  renderDesignTab(Object.keys(savedDesignRows).length ? aggregateDesign(Object.values(savedDesignRows)) : DATA);
+
+  const savedUxRows = loadUxRows();
+  renderUXTab(Object.keys(savedUxRows).length ? aggregateUX(Object.values(savedUxRows)) : DATA_UX);
 
   renderInsights('aiInsights', [
     { tag: 'watch', html: `<b>Пік навантаження — березень 2026</b> (700 нових / 669 завершених задач за місяць). З березня по липень обсяг стабільно знижується — варто перевірити, чи це сезонний спад запитів, чи менше кампаній заплановано на літо.` },
@@ -1807,14 +1949,15 @@ if (typeof module !== 'undefined') {
     }));
     zone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
 
+    const exts = Array.isArray(ext) ? ext : [ext];
     async function handleFiles(fileList) {
-      const files = [...fileList].filter(f => f.name.toLowerCase().endsWith(ext));
+      const files = [...fileList].filter(f => exts.some(e => f.name.toLowerCase().endsWith(e)));
       if (!files.length) {
-        status.textContent = `Не знайдено жодного ${ext} файлу серед завантажених.`;
+        status.textContent = `Не знайдено жодного файлу (${exts.join('/')}) серед завантажених.`;
         status.className = 'upload-status upload-error';
         return;
       }
-      if (ext === '.xlsx' && !checkBrowserSupport()) return;
+      if (exts.includes('.xlsx') && files.some(f => f.name.toLowerCase().endsWith('.xlsx')) && !checkBrowserSupport()) return;
       status.textContent = `Обробка ${files.length} файл(ів)...`;
       status.className = 'upload-status';
       try {
@@ -1836,10 +1979,19 @@ if (typeof module !== 'undefined') {
       if (!rows) throw new Error(`У файлі «${file.name}» немає аркуша «Консолидированные данные»`);
       allRecords = allRecords.concat(rowsToRecords(rows));
     }
-    const data = aggregateDesign(allRecords);
+    const store = loadDesignRows();
+    let added = 0, updated = 0;
+    for (const r of allRecords) {
+      const id = r['ИД задачи '] ?? r['ИД задачи'];
+      if (id == null) continue;
+      if (Object.prototype.hasOwnProperty.call(store, id)) updated++; else added++;
+      store[id] = r;
+    }
+    saveDesignRows(store);
+    const data = aggregateDesign(Object.values(store));
     renderDesignTab(data);
     const status = document.getElementById('uploadStatusDesign');
-    status.textContent = `Завантажено: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач із ${files.length} файл(ів) · ${data.meta.date_min}–${data.meta.date_max}`;
+    status.textContent = `Додано ${added}, оновлено ${updated} задач · накопичено всього: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач · ${data.meta.date_min}–${data.meta.date_max}`;
     status.className = 'upload-status upload-ok';
   });
 
@@ -1852,34 +2004,66 @@ if (typeof module !== 'undefined') {
       if (!rows) throw new Error(`У файлі «${file.name}» немає аркуша «Issue Navigator»`);
       allRecords = allRecords.concat(rowsToRecords(rows));
     }
-    const data = aggregateUX(allRecords);
+    const store = loadUxRows();
+    let added = 0, updated = 0;
+    for (const r of allRecords) {
+      const key = r['Key'];
+      if (key == null) continue;
+      if (Object.prototype.hasOwnProperty.call(store, key)) updated++; else added++;
+      store[key] = r;
+    }
+    saveUxRows(store);
+    const data = aggregateUX(Object.values(store));
     renderUXTab(data);
     const status = document.getElementById('uploadStatusUx');
-    status.textContent = `Завантажено: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач із ${files.length} файл(ів) · ${data.meta.date_min}–${data.meta.date_max}`;
+    status.textContent = `Додано ${added}, оновлено ${updated} задач · накопичено всього: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач · ${data.meta.date_min}–${data.meta.date_max}`;
     status.className = 'upload-status upload-ok';
   });
 
-  // Each uploaded .json = one Trello board = one project. Multiple uploads accumulate;
-  // re-uploading a board with the same name replaces that project's entry in place.
-  let projectsState = [];
-  setupDropzone('dropzoneProjects', 'fileInputProjects', 'uploadStatusProjects', '.json', async (files) => {
-    const loaded = [];
-    for (const file of files) {
+  // Reads one project file in whichever of the three supported formats it is. Only Trello's
+  // own JSON export is a calibrated parser (it alone carries labels/lists/action-history);
+  // .csv/.xlsx go through the generic heuristic mapper — see genericRowsToTrelloShape().
+  async function parseProjectFile(file) {
+    const lower = file.name.toLowerCase();
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    if (lower.endsWith('.json')) {
       const text = await file.text();
       let json;
       try { json = JSON.parse(text); } catch (e) { throw new Error(`«${file.name}» не є коректним JSON`); }
       if (!Array.isArray(json.cards) || !Array.isArray(json.lists)) {
         throw new Error(`«${file.name}» не схожий на Trello-експорт дошки (немає cards/lists)`);
       }
-      loaded.push(aggregateProject(json, Date.now()));
+      return json;
     }
-    for (const proj of loaded) {
-      const i = projectsState.findIndex(p => p.id === proj.id);
-      if (i >= 0) projectsState[i] = proj; else projectsState.push(proj);
+    if (lower.endsWith('.csv')) {
+      const text = await file.text();
+      return genericRowsToTrelloShape(parseCsvText(text), baseName);
     }
+    if (lower.endsWith('.xlsx')) {
+      if (!checkBrowserSupport()) throw new Error('Браузер не підтримує розбір .xlsx.');
+      const ab = await file.arrayBuffer();
+      const sheets = await parseXlsx(ab, null, inflateRawBrowser);
+      const firstSheetName = Object.keys(sheets)[0];
+      if (!firstSheetName) throw new Error(`«${file.name}»: у книзі не знайдено жодного аркуша з даними.`);
+      return genericRowsToTrelloShape(rowsToRecords(sheets[firstSheetName]), baseName);
+    }
+    throw new Error(`Непідтримуваний формат файлу: ${file.name}`);
+  }
+
+  setupDropzone('dropzoneProjects', 'fileInputProjects', 'uploadStatusProjects', ['.json', '.csv', '.xlsx'], async (files) => {
+    const store = loadProjectBoards();
+    let genericCount = 0;
+    for (const file of files) {
+      const json = await parseProjectFile(file);
+      if (!file.name.toLowerCase().endsWith('.json')) genericCount++;
+      mergeBoardIntoStore(store, json);
+    }
+    saveProjectBoards(store);
+    projectsState = allProjectsFromStore(store);
     renderProjectsTab(projectsState);
     const status = document.getElementById('uploadStatusProjects');
-    status.textContent = `Завантажено ${loaded.length} проєкт(и/ів) · всього в списку: ${projectsState.length}`;
+    status.textContent = `Оброблено ${files.length} файл(ів) · проєктів у списку: ${projectsState.length}`
+      + (genericCount ? ` · ${genericCount} із них — не Trello JSON, розпізнано евристикою: перевірте результат` : '');
     status.className = 'upload-status upload-ok';
   });
 
