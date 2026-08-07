@@ -123,6 +123,34 @@
   .bar-fill.dashed { background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.08) 4px, rgba(0,0,0,0.08) 8px); }
   .bar-val { font-size: 12px; color: var(--text-secondary); width: 90px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
+  .progress-bar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--gridline); }
+  .progress-seg { height: 100%; }
+  .progress-seg.done { background: var(--brand-green); }
+  .progress-seg.in_progress { background: var(--brand-orange); }
+  .progress-seg.new { background: var(--series-other); }
+  .progress-legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+  .progress-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+  .project-row { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .project-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer; background: var(--page-plane); }
+  .project-head .toggle-arrow { font-size: 11px; color: var(--text-muted); width: 12px; flex-shrink: 0; transition: transform .15s; }
+  .project-row.open .toggle-arrow { transform: rotate(90deg); }
+  .project-head .p-title { font-weight: 700; font-size: 13.5px; color: var(--text-primary); flex: 0 0 220px; }
+  .project-head .p-bar-wrap { flex: 1; min-width: 160px; }
+  .project-head .p-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
+  .project-head .badge-risk { background: rgba(208,59,59,0.15); color: var(--status-critical); border-radius: 5px; padding: 2px 7px; font-weight: 700; font-size: 11.5px; }
+  .project-body { display: none; padding: 4px 16px 16px; }
+  .project-row.open .project-body { display: block; }
+
+  .stream-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--gridline); }
+  .stream-row .s-name { flex: 0 0 190px; font-size: 12.5px; color: var(--text-primary); font-weight: 600; }
+  .stream-row .s-bar-wrap { flex: 1; min-width: 140px; }
+  .stream-row .s-stats { display: flex; gap: 14px; font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0; width: 260px; font-variant-numeric: tabular-nums; }
+  .stream-row .s-stats b { color: var(--text-primary); }
+
+  .stale-list { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; color: var(--text-secondary); }
+  .stale-list li { padding: 4px 0; border-top: 1px solid var(--gridline); }
+
   .tooltip {
     position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
     font-size: 12px; padding: 6px 9px; border-radius: 6px; white-space: nowrap; opacity: 0; transition: opacity .1s;
@@ -375,20 +403,29 @@
 
   <!-- TAB 2 -->
   <div class="tab-panel" id="t2">
-    <div class="card placeholder-card">
-      <h2>Успішність проєктів (продактовнерська вкладка)</h2>
-      <p class="card-sub">Ця вкладка ще не наповнена — потрібні експорти з Trello (проєктні дошки) та внутрішньої дошки.</p>
-      <p style="font-size:13.5px; color:var(--text-secondary); line-height:1.6; margin-top:10px">
-        За результатами обговорення показники, які тут будуть: <b>дотримання строків</b>, <b>виконання скоупу / етапів</b>, <b>ризики та блокери</b>.
-      </p>
-      <ul class="checklist">
-        <li>Trello-експорт (JSON) кожної проєктної дошки — картки, списки/колонки, учасники, due date, дата завершення, лейбли</li>
-        <li>Назва списку/колонки, що відповідає плановій даті здачі проєкту (чи є окрема картка-майлстоун?)</li>
-        <li>Що вважати «етапом проєкту» — список на дошці чи чекліст усередині картки?</li>
-        <li>Чим позначені ризики/блокери — окремий лейбл, список «Blocked», коментар?</li>
-        <li>Назва й формат внутрішньої дошки, і як з неї вигрузити дані</li>
-      </ul>
+
+    <div class="dropzone" id="dropzoneProjects">
+      <div class="dz-title">📂 Завантажити проєкти (Trello, .json)</div>
+      <div class="dz-sub">Перетягніть сюди JSON-експорт(и) Trello-дошки або натисніть, щоб обрати — кожен файл = один проєкт, можна кілька одразу. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
+      <input type="file" id="fileInputProjects" accept=".json" multiple hidden>
     </div>
+    <div class="upload-status" id="uploadStatusProjects"></div>
+
+    <div class="kpi-row" id="kpiRowProjects"></div>
+
+    <div class="card">
+      <h2>Проєкти</h2>
+      <p class="card-sub">Клікніть на проєкт, щоб розгорнути розподіл по стрімах. Прогрес-бар: виконано / в роботі / нові.</p>
+      <div id="projectsList"></div>
+      <p class="card-sub" style="margin:12px 0 0">Стрім визначається за лейблом картки: «Категорії» → Категорії, «SEO» → SEO, «MARKETPLACE» → MARKETPLACE, «IN»/«OUT» → Команда вебу, немає жодного з цих лейблів → Управління товарами.</p>
+    </div>
+
+    <div class="card">
+      <h2>AI-висновки: успішність проєктів</h2>
+      <p class="card-sub">Згенеровано на основі даних вище — не жива AI-модель, а розрахункові спостереження</p>
+      <ul class="insights-list" id="aiInsightsProjects"></ul>
+    </div>
+
   </div>
 
 </div>
@@ -992,11 +1029,77 @@ function aggregateUX(records) {
   };
 }
 
+// ---------------- Успішність проєктів (Trello export) ----------------
+
+// Stream = derived from the card's Trello labels, checked in this priority order.
+// A card with none of these labels defaults to "Управління товарами" (per user's rule).
+const STREAM_LABEL_PRIORITY = ['Категорії', 'SEO', 'MARKETPLACE'];
+const WEB_TEAM_LABELS = new Set(['IN', 'OUT']);
+const BLOCKER_LABEL = 'BLOCKER';
+const DONE_LIST_NAMES = new Set(['DONE']);
+const NEW_LIST_NAMES = new Set(['NEW']);
+const ON_HOLD_LIST_NAMES = new Set(['ON HOLD']);
+const STALE_DAYS_THRESHOLD = 30;
+
+function classifyStream(labelNames) {
+  for (const s of STREAM_LABEL_PRIORITY) if (labelNames.includes(s)) return s;
+  for (const l of labelNames) if (WEB_TEAM_LABELS.has(l)) return 'Команда вебу';
+  return 'Управління товарами';
+}
+
+function emptyBucketCounts() {
+  return { total: 0, done: 0, in_progress: 0, new: 0, blocked: 0, on_hold: 0 };
+}
+
+// `nowMs` is injected (not read from Date.now() internally) so this stays testable/deterministic.
+function aggregateProject(trelloJson, nowMs) {
+  const labelsById = {};
+  for (const l of trelloJson.labels || []) labelsById[l.id] = l.name;
+  const listsById = {};
+  for (const l of trelloJson.lists || []) listsById[l.id] = l.name;
+
+  const cards = (trelloJson.cards || []).filter(c => !c.closed);
+
+  const totals = emptyBucketCounts();
+  const streams = {};
+  const blockedCards = [];
+  const staleCards = [];
+
+  for (const c of cards) {
+    const listName = listsById[c.idList] || 'UNKNOWN';
+    const labelNames = (c.idLabels || []).map(id => labelsById[id]).filter(Boolean);
+    const stream = classifyStream(labelNames);
+    const bucket = DONE_LIST_NAMES.has(listName) ? 'done' : (NEW_LIST_NAMES.has(listName) ? 'new' : 'in_progress');
+    const isBlocked = labelNames.includes(BLOCKER_LABEL);
+    const isOnHold = ON_HOLD_LIST_NAMES.has(listName);
+
+    if (!streams[stream]) streams[stream] = emptyBucketCounts();
+    streams[stream].total++; streams[stream][bucket]++;
+    totals.total++; totals[bucket]++;
+    if (isBlocked) { streams[stream].blocked++; totals.blocked++; blockedCards.push({ name: c.name, list: listName, stream }); }
+    if (isOnHold) { streams[stream].on_hold++; totals.on_hold++; }
+
+    if (bucket !== 'done' && c.dateLastActivity) {
+      const days = (nowMs - new Date(c.dateLastActivity).getTime()) / 86400000;
+      if (days > STALE_DAYS_THRESHOLD) staleCards.push({ name: c.name, list: listName, stream, days: Math.round(days) });
+    }
+  }
+  staleCards.sort((a, b) => b.days - a.days);
+
+  return {
+    name: trelloJson.name || 'Без назви',
+    totals, streams,
+    blocked_cards: blockedCards,
+    stale_cards: staleCards,
+  };
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     parseAnyDate, monthKey, businessDaysBetween, monthRange, capacityHoursByMonth,
     buildPersonInsightsFor, buildYearlyViews,
     classifyDesignTask, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
+    classifyStream, aggregateProject,
   };
 }
 
@@ -1295,6 +1398,132 @@ if (typeof module !== 'undefined') {
     });
   }
 
+  // ---------- Успішність проєктів ----------
+  const STREAM_ORDER = ['Управління товарами', 'Категорії', 'SEO', 'MARKETPLACE', 'Команда вебу'];
+
+  function progressBarHtml(t) {
+    const pct = (n) => t.total ? (n / t.total * 100) : 0;
+    return `<div class="progress-bar">
+      <div class="progress-seg done" style="width:${pct(t.done)}%"></div>
+      <div class="progress-seg in_progress" style="width:${pct(t.in_progress)}%"></div>
+      <div class="progress-seg new" style="width:${pct(t.new)}%"></div>
+    </div>`;
+  }
+
+  function renderProjectsTab(projects) {
+    const totals = { total: 0, done: 0, in_progress: 0, new: 0, blocked: 0, on_hold: 0 };
+    let activeBlockedCount = 0;
+    for (const p of projects) {
+      for (const k of Object.keys(totals)) totals[k] += p.totals[k];
+      activeBlockedCount += p.blocked_cards.filter(c => c.list !== 'DONE').length;
+    }
+    renderKpiRow('kpiRowProjects', [
+      { label: 'Проєктів завантажено', value: projects.length, sub: 'кожен файл — окремий проєкт' },
+      { label: 'Всього задач', value: totals.total.toLocaleString('uk-UA'), sub: 'по всіх проєктах разом' },
+      { label: 'Виконано', value: totals.total ? Math.round(totals.done/totals.total*100)+'%' : '—', sub: `${totals.done} з ${totals.total}` },
+      { label: 'Активні блокери', value: activeBlockedCount, sub: `ще не завершені (всього з міткою BLOCKER: ${totals.blocked})` },
+    ]);
+
+    const listEl = document.getElementById('projectsList');
+    if (!projects.length) {
+      listEl.innerHTML = `<p class="card-sub">Ще не завантажено жодного проєкту — перетягніть Trello-експорт(и) вище.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = projects.map((p, i) => {
+      const activeBlocked = p.blocked_cards.filter(c => c.list !== 'DONE');
+      const streamNames = Object.keys(p.streams).sort((a, b) => STREAM_ORDER.indexOf(a) - STREAM_ORDER.indexOf(b));
+      const streamRows = streamNames.map(name => {
+        const s = p.streams[name];
+        return `
+        <div class="stream-row">
+          <div class="s-name">${name}</div>
+          <div class="s-bar-wrap">${progressBarHtml(s)}</div>
+          <div class="s-stats">
+            <span>Всього: <b>${s.total}</b></span>
+            <span>Вик.: <b>${s.done}</b></span>
+            <span>В роботі: <b>${s.in_progress}</b></span>
+            <span>Нові: <b>${s.new}</b></span>
+          </div>
+        </div>`;
+      }).join('');
+
+      const staleRelevant = p.stale_cards.filter(c => c.list !== 'NEW' && c.list !== 'ON HOLD');
+      const staleHtml = staleRelevant.length ? `
+        <p class="card-sub" style="margin-top:14px">Задачі в активній роботі без руху 30+ днів (${staleRelevant.length}):</p>
+        <ul class="stale-list">${staleRelevant.slice(0, 8).map(c => `<li>${c.name} — ${c.list}, ${c.stream}, ${c.days} дн.</li>`).join('')}</ul>
+      ` : '';
+
+      const blockedHtml = activeBlocked.length ? `
+        <p class="card-sub" style="margin-top:14px">Активні блокери (${activeBlocked.length}):</p>
+        <ul class="stale-list">${activeBlocked.map(c => `<li>${c.name} — ${c.list}, ${c.stream}</li>`).join('')}</ul>
+      ` : '';
+
+      return `
+      <div class="project-row" id="projectRow${i}">
+        <div class="project-head" data-idx="${i}">
+          <span class="toggle-arrow">▶</span>
+          <div class="p-title">${p.name}</div>
+          <div class="p-bar-wrap">${progressBarHtml(p.totals)}</div>
+          <div class="p-stats">
+            <span>Всього: <b>${p.totals.total}</b></span>
+            <span>Вик.: <b>${p.totals.total ? Math.round(p.totals.done/p.totals.total*100) : 0}%</b></span>
+            <span>В роботі: <b>${p.totals.in_progress}</b></span>
+            <span>Нові: <b>${p.totals.new}</b></span>
+          </div>
+          ${activeBlocked.length ? `<span class="badge-risk">⚠ ${activeBlocked.length}</span>` : ''}
+        </div>
+        <div class="project-body">
+          ${streamRows}
+          ${blockedHtml}
+          ${staleHtml}
+        </div>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.project-head').forEach(head => {
+      head.addEventListener('click', () => head.closest('.project-row').classList.toggle('open'));
+    });
+
+    renderInsights('aiInsightsProjects', buildProjectInsights(projects, totals, activeBlockedCount));
+  }
+
+  function buildProjectInsights(projects, totals, activeBlockedCount) {
+    const items = [];
+    if (!projects.length) return items;
+
+    if (activeBlockedCount === 0) {
+      items.push({ tag: 'good', html: `<b>Активних блокерів немає:</b> усі задачі з міткою BLOCKER (${totals.blocked}) уже завершені.` });
+    } else {
+      items.push({ tag: 'watch', html: `<b>${activeBlockedCount} активних блокери ще не завершені</b> — див. список у розгорнутій картці проєкту.` });
+    }
+
+    for (const p of projects) {
+      const streamNames = Object.keys(p.streams);
+      if (streamNames.length < 2) continue;
+      let worst = streamNames[0];
+      for (const n of streamNames) {
+        const rate = (s) => s.total ? s.done / s.total : 1;
+        if (rate(p.streams[n]) < rate(p.streams[worst])) worst = n;
+      }
+      const s = p.streams[worst];
+      const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
+      if (s.total >= 5 && pct < 60) {
+        items.push({ tag: 'watch', html: `<b>«${p.name}»: найповільніший стрім — ${worst}</b> (${pct}% виконано, ${s.total} задач) — варто перевірити, чи є там ризики.` });
+      }
+      const staleRelevant = p.stale_cards.filter(c => c.list !== 'NEW' && c.list !== 'ON HOLD');
+      if (staleRelevant.length) {
+        items.push({ tag: 'idea', html: `<b>«${p.name}»: ${staleRelevant.length} задач в активній роботі без руху 30+ днів</b> — можливо, забуті або застрягли.` });
+      }
+      if (p.totals.on_hold > 0) {
+        items.push({ tag: 'idea', html: `<b>«${p.name}»: ${p.totals.on_hold} задач на паузі (ON HOLD)</b> — ${Math.round(p.totals.on_hold/p.totals.total*100)}% від усього обсягу.` });
+      }
+    }
+    return items;
+  }
+
+  renderProjectsTab([]);
+
   renderDesignTab(DATA);
   renderUXTab(DATA_UX);
 
@@ -1331,7 +1560,7 @@ if (typeof module !== 'undefined') {
     return true;
   }
 
-  function setupDropzone(zoneId, inputId, statusId, onFiles) {
+  function setupDropzone(zoneId, inputId, statusId, ext, onFiles) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
     const status = document.getElementById(statusId);
@@ -1348,13 +1577,13 @@ if (typeof module !== 'undefined') {
     zone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
 
     async function handleFiles(fileList) {
-      const files = [...fileList].filter(f => f.name.toLowerCase().endsWith('.xlsx'));
+      const files = [...fileList].filter(f => f.name.toLowerCase().endsWith(ext));
       if (!files.length) {
-        status.textContent = 'Не знайдено жодного .xlsx файлу серед завантажених.';
+        status.textContent = `Не знайдено жодного ${ext} файлу серед завантажених.`;
         status.className = 'upload-status upload-error';
         return;
       }
-      if (!checkBrowserSupport()) return;
+      if (ext === '.xlsx' && !checkBrowserSupport()) return;
       status.textContent = `Обробка ${files.length} файл(ів)...`;
       status.className = 'upload-status';
       try {
@@ -1367,7 +1596,7 @@ if (typeof module !== 'undefined') {
     }
   }
 
-  setupDropzone('dropzoneDesign', 'fileInputDesign', 'uploadStatusDesign', async (files) => {
+  setupDropzone('dropzoneDesign', 'fileInputDesign', 'uploadStatusDesign', '.xlsx', async (files) => {
     let allRecords = [];
     for (const file of files) {
       const ab = await file.arrayBuffer();
@@ -1383,7 +1612,7 @@ if (typeof module !== 'undefined') {
     status.className = 'upload-status upload-ok';
   });
 
-  setupDropzone('dropzoneUx', 'fileInputUx', 'uploadStatusUx', async (files) => {
+  setupDropzone('dropzoneUx', 'fileInputUx', 'uploadStatusUx', '.xlsx', async (files) => {
     let allRecords = [];
     for (const file of files) {
       const ab = await file.arrayBuffer();
@@ -1396,6 +1625,30 @@ if (typeof module !== 'undefined') {
     renderUXTab(data);
     const status = document.getElementById('uploadStatusUx');
     status.textContent = `Завантажено: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач із ${files.length} файл(ів) · ${data.meta.date_min}–${data.meta.date_max}`;
+    status.className = 'upload-status upload-ok';
+  });
+
+  // Each uploaded .json = one Trello board = one project. Multiple uploads accumulate;
+  // re-uploading a board with the same name replaces that project's entry in place.
+  let projectsState = [];
+  setupDropzone('dropzoneProjects', 'fileInputProjects', 'uploadStatusProjects', '.json', async (files) => {
+    const loaded = [];
+    for (const file of files) {
+      const text = await file.text();
+      let json;
+      try { json = JSON.parse(text); } catch (e) { throw new Error(`«${file.name}» не є коректним JSON`); }
+      if (!Array.isArray(json.cards) || !Array.isArray(json.lists)) {
+        throw new Error(`«${file.name}» не схожий на Trello-експорт дошки (немає cards/lists)`);
+      }
+      loaded.push(aggregateProject(json, Date.now()));
+    }
+    for (const proj of loaded) {
+      const i = projectsState.findIndex(p => p.name === proj.name);
+      if (i >= 0) projectsState[i] = proj; else projectsState.push(proj);
+    }
+    renderProjectsTab(projectsState);
+    const status = document.getElementById('uploadStatusProjects');
+    status.textContent = `Завантажено ${loaded.length} проєкт(и/ів) · всього в списку: ${projectsState.length}`;
     status.className = 'upload-status upload-ok';
   });
 
