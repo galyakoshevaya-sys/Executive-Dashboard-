@@ -193,12 +193,17 @@
   }
   .export-btn:hover { border-color: var(--text-secondary); }
 
+  /* Print keeps the app's own dark/light theme as-is (no forced light mode) — we only need to:
+     hide interactive-only chrome, force every collapsed project open, and stop the browser's
+     default print behavior from stripping background colors (color-adjust: exact). Only the
+     active tab is ever visible to begin with (.tab-panel display:none/active), so printing
+     while on a given tab already exports that tab alone — no extra rule needed for that. */
   @media print {
     .dropzone, .upload-status, .export-row, .tabs { display: none !important; }
-    .tab-panel { display: block !important; }
     .project-body { display: block !important; }
-    .viz-root { background: #fff; color: #111; }
-    .card, .project-row, .forecast-box { break-inside: avoid; border-color: #ccc !important; }
+    .toggle-arrow { display: none !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    .card, .project-row, .forecast-box { break-inside: avoid; }
   }
 
   .tooltip {
@@ -304,6 +309,10 @@
     </div>
     <div class="upload-status" id="uploadStatusDesign"></div>
 
+    <div class="export-row">
+      <button class="export-btn" id="btnExportPdfDesign">🖨️ Друк / PDF (тільки ця вкладка)</button>
+    </div>
+
     <div class="kpi-row" id="kpiRow"></div>
 
     <div class="card">
@@ -399,6 +408,10 @@
     </div>
     <div class="upload-status" id="uploadStatusUx"></div>
 
+    <div class="export-row">
+      <button class="export-btn" id="btnExportPdfUx">🖨️ Друк / PDF (тільки ця вкладка)</button>
+    </div>
+
     <div class="kpi-row" id="kpiRowUx"></div>
 
     <div class="card">
@@ -462,7 +475,7 @@
     <div class="upload-status" id="uploadStatusProjects"></div>
 
     <div class="export-row">
-      <button class="export-btn" id="btnExportPdf">🖨️ Друк / PDF</button>
+      <button class="export-btn" id="btnExportPdf">🖨️ Друк / PDF (тільки ця вкладка)</button>
       <button class="export-btn" id="btnExportXlsx">📊 Завантажити Excel (.xlsx)</button>
     </div>
 
@@ -1853,6 +1866,8 @@ if (typeof module !== 'undefined') {
   });
 
   document.getElementById('btnExportPdf').addEventListener('click', () => window.print());
+  document.getElementById('btnExportPdfDesign').addEventListener('click', () => window.print());
+  document.getElementById('btnExportPdfUx').addEventListener('click', () => window.print());
   document.getElementById('btnExportXlsx').addEventListener('click', () => {
     if (!projectsState.length) { alert('Спочатку завантажте хоча б один проєкт.'); return; }
     downloadProjectsXlsx(projectsState);
