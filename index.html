@@ -130,41 +130,49 @@
   .progress-seg.new { background: var(--series-other); }
   .progress-legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); margin-top: 5px; }
   .progress-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .progress-caption { display: flex; gap: 12px; font-size: 10.5px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; }
+  .progress-caption .cap-dot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .progress-caption .cap-dot.done { background: var(--brand-green); }
+  .progress-caption .cap-dot.in_progress { background: var(--brand-orange); }
+  .progress-caption .cap-dot.new { background: var(--series-other); }
 
-  .project-row { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
-  .project-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer; background: var(--page-plane); }
+  .project-row { border: 1px solid var(--border); border-left: 6px solid var(--gridline); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .project-row.st-green { border-left-color: var(--status-good); }
+  .project-row.st-yellow { border-left-color: #d9b429; }
+  .project-row.st-orange { border-left-color: var(--status-serious); }
+  .project-row.st-red { border-left-color: var(--status-critical); }
+  .project-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer; background: var(--page-plane); }
   .project-head .toggle-arrow { font-size: 11px; color: var(--text-muted); width: 12px; flex-shrink: 0; transition: transform .15s; }
   .project-row.open .toggle-arrow { transform: rotate(90deg); }
   .project-head .p-title { font-weight: 700; font-size: 13.5px; color: var(--text-primary); flex: 0 0 220px; }
-  .project-head .p-bar-wrap { flex: 1; min-width: 160px; }
-  .project-head .p-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
-  .project-head .badge-risk { background: rgba(208,59,59,0.15); color: var(--status-critical); border-radius: 5px; padding: 2px 7px; font-weight: 700; font-size: 11.5px; }
+  .project-head .p-bar-wrap { flex: 1 1 220px; min-width: 180px; }
+  .project-head .p-stats { display: flex; flex-wrap: nowrap; gap: 14px; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; white-space: nowrap; }
+  .project-head .badge-risk { background: rgba(208,59,59,0.15); color: var(--status-critical); border-radius: 5px; padding: 2px 7px; font-weight: 700; font-size: 11.5px; white-space: nowrap; }
   .project-body { display: none; padding: 4px 16px 16px; }
   .project-row.open .project-body { display: block; }
 
-  .stream-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--gridline); }
-  .stream-row .s-name { flex: 0 0 190px; font-size: 12.5px; color: var(--text-primary); font-weight: 600; }
-  .stream-row .s-bar-wrap { flex: 1; min-width: 140px; }
-  .stream-row .s-stats { display: flex; gap: 14px; font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0; width: 260px; font-variant-numeric: tabular-nums; }
+  .stream-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--gridline); }
+  .stream-row .s-name { flex: 0 0 170px; font-size: 12.5px; color: var(--text-primary); font-weight: 600; }
+  .stream-row .s-bar-wrap { flex: 1 1 160px; min-width: 140px; }
+  .stream-row .s-stats { display: flex; flex-wrap: nowrap; gap: 12px; font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .stream-row .s-stats b { color: var(--text-primary); }
 
   .stale-list { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; color: var(--text-secondary); }
   .stale-list li { padding: 4px 0; border-top: 1px solid var(--gridline); }
 
-  .status-legend { display: flex; gap: 3px; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
-  .status-legend-seg { flex: 1; padding: 12px 10px; color: #fff; text-align: center; }
-  .status-legend-seg .sl-label { font-size: 12.5px; font-weight: 700; }
-  .status-legend-seg .sl-pct { font-size: 19px; font-weight: 900; font-family: "Arial Black", Arial, sans-serif; margin-top: 3px; }
-  .status-legend-seg.st-green { background: var(--status-good); }
-  .status-legend-seg.st-yellow { background: #d9b429; }
-  .status-legend-seg.st-orange { background: var(--status-serious); }
-  .status-legend-seg.st-red { background: var(--status-critical); }
+  .status-key { display: flex; flex-wrap: wrap; gap: 16px; }
+  .status-key-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); }
+  .status-key-item .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .status-key-item .dot.st-green { background: var(--status-good); }
+  .status-key-item .dot.st-yellow { background: #d9b429; }
+  .status-key-item .dot.st-orange { background: var(--status-serious); }
+  .status-key-item .dot.st-red { background: var(--status-critical); }
 
-  .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; flex-shrink: 0; }
-  .status-dot.st-green { background: var(--status-good); }
-  .status-dot.st-yellow { background: #d9b429; }
-  .status-dot.st-orange { background: var(--status-serious); }
-  .status-dot.st-red { background: var(--status-critical); }
+  .status-badge { display: inline-block; padding: 4px 11px; border-radius: 6px; color: #fff; font-weight: 700; font-size: 11.5px; flex-shrink: 0; white-space: nowrap; }
+  .status-badge.st-green { background: var(--status-good); }
+  .status-badge.st-yellow { background: #d9b429; }
+  .status-badge.st-orange { background: var(--status-serious); }
+  .status-badge.st-red { background: var(--status-critical); }
 
   .alerts-card { border: 1px solid var(--status-critical); background: rgba(208,59,59,0.06); }
   .alerts-card h2 { color: var(--status-critical); }
@@ -172,7 +180,8 @@
   .alerts-empty { font-size: 13px; color: var(--text-secondary); }
 
   .forecast-box { background: var(--page-plane); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
-  .forecast-box .f-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-secondary); padding: 3px 0; }
+  .forecast-box .f-row { display: flex; gap: 8px; font-size: 12.5px; color: var(--text-secondary); padding: 4px 0; }
+  .forecast-box .f-row .f-label { flex: 0 0 auto; }
   .forecast-box .f-row b { color: var(--text-primary); }
   .forecast-box .f-reco { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gridline); font-size: 12.5px; color: var(--text-secondary); }
 
@@ -460,9 +469,9 @@
     <div class="kpi-row" id="kpiRowProjects"></div>
 
     <div class="card">
-      <h2>Світлофор статусів. Як себе почуває проєкт</h2>
-      <p class="card-sub">Частка проєктів у кожному статусі. Термін і блокери рахуються з даних; ефект/бюджет — поки без джерела даних (завжди 0%).</p>
-      <div class="status-legend" id="statusLegend"></div>
+      <h2>Що означає колір проєкту</h2>
+      <p class="card-sub">Кожен проєкт нижче має свою кольорову позначку статусу. Термін і блокери рахуються з даних; ефект/бюджет поки без джерела даних, тому не проставляється автоматично.</p>
+      <div class="status-key" id="statusLegend"></div>
     </div>
 
     <div class="card alerts-card">
@@ -1536,24 +1545,26 @@ if (typeof module !== 'undefined') {
   const STATUS_LABELS = { green: 'Рух по плану', yellow: 'Є відхилення в терміні реалізації', orange: 'Є відхилення ефекту або бюджету', red: 'Повне блокування реалізації' };
   const fmtDate = (ms) => ms ? new Date(ms).toLocaleDateString('uk-UA') : '—';
 
-  function progressBarHtml(t) {
+  function progressBarHtml(t, withCaption) {
     const pct = (n) => t.total ? (n / t.total * 100) : 0;
-    return `<div class="progress-bar">
+    const pctRound = (n) => t.total ? Math.round(n / t.total * 100) : 0;
+    const bar = `<div class="progress-bar">
       <div class="progress-seg done" style="width:${pct(t.done)}%"></div>
       <div class="progress-seg in_progress" style="width:${pct(t.in_progress)}%"></div>
       <div class="progress-seg new" style="width:${pct(t.new)}%"></div>
     </div>`;
+    if (!withCaption) return bar;
+    const caption = `<div class="progress-caption">
+      <span><span class="cap-dot done"></span>Вик. ${pctRound(t.done)}%</span>
+      <span><span class="cap-dot in_progress"></span>В роботі ${pctRound(t.in_progress)}%</span>
+      <span><span class="cap-dot new"></span>Нові ${pctRound(t.new)}%</span>
+    </div>`;
+    return bar + caption;
   }
 
-  function renderStatusLegend(projects) {
-    const counts = { green: 0, yellow: 0, orange: 0, red: 0 };
-    for (const p of projects) counts[p.status] = (counts[p.status] || 0) + 1;
-    const total = projects.length;
+  function renderStatusLegend() {
     document.getElementById('statusLegend').innerHTML = ['green', 'yellow', 'orange', 'red'].map(key => `
-      <div class="status-legend-seg st-${key}">
-        <div class="sl-label">${STATUS_LABELS[key]}</div>
-        <div class="sl-pct">${total ? Math.round(counts[key] / total * 100) : 0}%</div>
-      </div>`).join('');
+      <div class="status-key-item"><span class="dot st-${key}"></span>${STATUS_LABELS[key]}</div>`).join('');
   }
 
   function forecastBoxHtml(p) {
@@ -1563,14 +1574,14 @@ if (typeof module !== 'undefined') {
       const msg = f.remaining === 0
         ? 'усі задачі вже виконано'
         : 'недостатньо історії переміщень у DONE для розрахунку швидкості';
-      return `<div class="forecast-box"><div class="f-row"><span>Прогноз завершення</span><b>${msg}</b></div></div>`;
+      return `<div class="forecast-box"><div class="f-row"><span class="f-label">Прогноз завершення:</span><b>${msg}</b></div></div>`;
     }
     const onTime = f.projected_date !== null && f.projected_date <= deadline;
     const reco = p.recommendation ? `<div class="f-reco">💡 Найбільше ризиків у стрімі «${p.recommendation.stream}» (${p.recommendation.on_hold} на паузі, ${p.recommendation.blocked} з блокером із ${p.recommendation.stream_total} задач у стрімі) — розблокування цих задач найбільше прискорить проєкт.</div>` : '';
     return `<div class="forecast-box">
-      <div class="f-row"><span>Швидкість (останні ${f.window_days} дн., ${f.done_moves} задач у DONE)</span><b>${f.velocity_per_week} задач/тиждень</b></div>
-      <div class="f-row"><span>Залишилось задач (в роботі + нові)</span><b>${f.remaining}</b></div>
-      <div class="f-row"><span>Прогнозована дата завершення</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(f.projected_date)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>
+      <div class="f-row"><span class="f-label">Швидкість (${f.window_days} дн., ${f.done_moves} задач у DONE):</span><b>${f.velocity_per_week} задач/тиждень</b></div>
+      <div class="f-row"><span class="f-label">Залишилось задач (в роботі + нові):</span><b>${f.remaining}</b></div>
+      <div class="f-row"><span class="f-label">Прогноз завершення:</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(f.projected_date)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>
       ${reco}
     </div>`;
   }
@@ -1589,18 +1600,20 @@ if (typeof module !== 'undefined') {
       { label: 'Активні блокери', value: activeBlockedCount, sub: `ще не завершені (всього з міткою BLOCKER: ${totals.blocked})` },
     ]);
 
-    renderStatusLegend(projects);
+    renderStatusLegend();
 
     const alertItems = [];
     for (const p of projects) {
       const activeBlocked = p.blocked_cards.filter(c => c.list !== 'DONE');
-      if (activeBlocked.length) {
-        alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: ${activeBlocked.length} активних блокер(и/ів)</b> — ${activeBlocked.slice(0, 3).map(c => c.name).join('; ')}${activeBlocked.length > 3 ? '…' : ''}` });
-      } else if (p.status === 'red') {
-        alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: статус «Повне блокування реалізації»</b>` });
+      for (const c of activeBlocked) {
+        const stateLabel = c.list === 'ON HOLD' ? 'на паузі (ON HOLD)' : `у роботі (${c.list})`;
+        alertItems.push({ tag: 'watch', html: `<b>«${c.name}»</b> — проєкт «${p.name}», стрім <b>${c.stream}</b>, ${stateLabel} — <span style="color:var(--status-critical)">причина: мітка BLOCKER, задача ще не виконана</span>` });
+      }
+      if (!activeBlocked.length && p.status === 'red') {
+        alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: статус «Повне блокування реалізації»</b> — причина: значна частка задач, що лишились, заблокована.` });
       }
       if (p.status === 'yellow') {
-        alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: ризик не встигнути до кінця року</b> — прогноз ${fmtDate(p.forecast.projected_date)}.` });
+        alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: ризик не встигнути до кінця року</b> — причина: за поточної швидкості (${p.forecast.has_data ? p.forecast.velocity_per_week + ' задач/тиж.' : 'дані відсутні'}) прогноз завершення ${fmtDate(p.forecast.projected_date)}, пізніше за дедлайн 31.12.` });
       }
     }
     const alertsEl = document.getElementById('alertsList');
@@ -1648,12 +1661,12 @@ if (typeof module !== 'undefined') {
       ` : '';
 
       return `
-      <div class="project-row" id="projectRow${i}">
+      <div class="project-row st-${p.status}" id="projectRow${i}">
         <div class="project-head" data-idx="${i}">
           <span class="toggle-arrow">▶</span>
-          <span class="status-dot st-${p.status}" title="${STATUS_LABELS[p.status]}"></span>
+          <span class="status-badge st-${p.status}">${STATUS_LABELS[p.status]}</span>
           <div class="p-title">${p.name}</div>
-          <div class="p-bar-wrap">${progressBarHtml(p.totals)}</div>
+          <div class="p-bar-wrap">${progressBarHtml(p.totals, true)}</div>
           <div class="p-stats">
             <span>Всього: <b>${p.totals.total}</b></span>
             <span>Вик.: <b>${p.totals.total ? Math.round(p.totals.done/p.totals.total*100) : 0}%</b></span>
