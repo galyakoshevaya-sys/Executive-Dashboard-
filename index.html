@@ -1201,10 +1201,16 @@ function yearEndDeadline(nowMs) {
 
 // Green/yellow/red only — "effect/budget deviation" (the 4th, orange, light on the user's
 // status legend) needs budget/impact data this source doesn't have, so it's never auto-set.
+//
+// A single blocked card out of a hundred remaining tasks isn't "complete blockage" — red is
+// reserved for when blockers make up a meaningful share of what's left. Otherwise the schedule
+// forecast (vs. the year-end deadline) alone decides on-track vs. slipping.
+const BLOCKED_SHARE_FOR_RED = 0.15;
 function computeProjectStatus(activeBlockedCount, forecast, nowMs) {
-  if (activeBlockedCount > 0) return 'red';
+  const remaining = forecast.remaining;
+  if (remaining > 0 && (activeBlockedCount / remaining) >= BLOCKED_SHARE_FOR_RED) return 'red';
   if (forecast.has_data && forecast.projected_date !== null && forecast.projected_date > yearEndDeadline(nowMs)) return 'yellow';
-  if (!forecast.has_data && forecast.remaining > 0) return 'yellow'; // no velocity signal at all — can't confirm on-track
+  if (!forecast.has_data && remaining > 0) return 'yellow'; // no velocity signal at all — can't confirm on-track
   return 'green';
 }
 
