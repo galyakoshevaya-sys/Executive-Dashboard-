@@ -1453,9 +1453,24 @@ if (typeof module !== 'undefined') {
     try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
     catch (e) { console.error('localStorage read failed for', key, e); return null; }
   }
+  // A failed write here is dangerous precisely because it's invisible otherwise: the render right
+  // after upload reads from the in-memory object, not localStorage, so it looks fine — but the
+  // NEXT upload calls lsGet() and silently continues from the last state that DID persist, which
+  // can be much smaller (e.g. quota exceeded, ~5-10MB/origin, once enough history accumulates).
+  // Callers must check the return value and warn the user instead of trusting a "success" render.
+  let lastStorageError = null;
   function lsSet(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-    catch (e) { console.error('localStorage write failed for', key, e); return false; }
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      lastStorageError = null;
+      return true;
+    } catch (e) {
+      console.error('localStorage write failed for', key, e);
+      lastStorageError = e.name === 'QuotaExceededError'
+        ? 'Перевищено ліміт збереження браузера (localStorage) — старіші дані лишаються, але цей набір НЕ зберігся й не буде під час наступного відкриття/завантаження.'
+        : `Не вдалося зберегти дані в браузері: ${e.message}`;
+      return false;
+    }
   }
 
   function loadDesignRows() { return lsGet(LS_KEY_DESIGN) || {}; }
@@ -2120,12 +2135,17 @@ if (typeof module !== 'undefined') {
       if (Object.prototype.hasOwnProperty.call(store, id)) updated++; else added++;
       store[id] = r;
     }
-    saveDesignRows(store);
+    const saved = saveDesignRows(store);
     const data = aggregateDesign(Object.values(store));
     renderDesignTab(data);
     const status = document.getElementById('uploadStatusDesign');
-    status.textContent = `Додано ${added}, оновлено ${updated} задач · накопичено всього: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач · ${data.meta.date_min}–${data.meta.date_max}`;
-    status.className = 'upload-status upload-ok';
+    if (saved) {
+      status.textContent = `Додано ${added}, оновлено ${updated} задач · накопичено всього: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач · ${data.meta.date_min}–${data.meta.date_max}`;
+      status.className = 'upload-status upload-ok';
+    } else {
+      status.textContent = `Показано ${data.meta.total_tasks.toLocaleString('uk-UA')} задач, АЛЕ НЕ ЗБЕРЕЖЕНО: ${lastStorageError}`;
+      status.className = 'upload-status upload-error';
+    }
   });
 
   setupDropzone('dropzoneUx', 'fileInputUx', 'uploadStatusUx', '.xlsx', async (files) => {
@@ -2145,12 +2165,17 @@ if (typeof module !== 'undefined') {
       if (Object.prototype.hasOwnProperty.call(store, key)) updated++; else added++;
       store[key] = r;
     }
-    saveUxRows(store);
+    const saved = saveUxRows(store);
     const data = aggregateUX(Object.values(store));
     renderUXTab(data);
     const status = document.getElementById('uploadStatusUx');
-    status.textContent = `Додано ${added}, оновлено ${updated} задач · накопичено всього: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач · ${data.meta.date_min}–${data.meta.date_max}`;
-    status.className = 'upload-status upload-ok';
+    if (saved) {
+      status.textContent = `Додано ${added}, оновлено ${updated} задач · накопичено всього: ${data.meta.total_tasks.toLocaleString('uk-UA')} задач · ${data.meta.date_min}–${data.meta.date_max}`;
+      status.className = 'upload-status upload-ok';
+    } else {
+      status.textContent = `Показано ${data.meta.total_tasks.toLocaleString('uk-UA')} задач, АЛЕ НЕ ЗБЕРЕЖЕНО: ${lastStorageError}`;
+      status.className = 'upload-status upload-error';
+    }
   });
 
   // Reads one project file in whichever of the three supported formats it is. Only Trello's
@@ -2191,13 +2216,18 @@ if (typeof module !== 'undefined') {
       if (!file.name.toLowerCase().endsWith('.json')) genericCount++;
       mergeBoardIntoStore(store, json);
     }
-    saveProjectBoards(store);
+    const saved = saveProjectBoards(store);
     projectsState = allProjectsFromStore(store);
     renderProjectsTab(projectsState);
     const status = document.getElementById('uploadStatusProjects');
-    status.textContent = `Оброблено ${files.length} файл(ів) · проєктів у списку: ${projectsState.length}`
-      + (genericCount ? ` · ${genericCount} із них — не Trello JSON, розпізнано евристикою: перевірте результат` : '');
-    status.className = 'upload-status upload-ok';
+    if (saved) {
+      status.textContent = `Оброблено ${files.length} файл(ів) · проєктів у списку: ${projectsState.length}`
+        + (genericCount ? ` · ${genericCount} із них — не Trello JSON, розпізнано евристикою: перевірте результат` : '');
+      status.className = 'upload-status upload-ok';
+    } else {
+      status.textContent = `Показано ${projectsState.length} проєкт(и/ів), АЛЕ НЕ ЗБЕРЕЖЕНО: ${lastStorageError}`;
+      status.className = 'upload-status upload-error';
+    }
   });
 
   document.getElementById('btnExportPdf').addEventListener('click', () => window.print());
