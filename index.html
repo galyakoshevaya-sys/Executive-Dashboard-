@@ -381,7 +381,7 @@
 
     <div class="card">
       <h2>Розподіл задач за типом роботи</h2>
-      <p class="card-sub">Чернетка класифікації за назвою задачі (і першим рядком опису, якщо назва не дала сигналу) — поля «тип» у Planner немає, розподіл орієнтовний і потребує вашої звірки</p>
+      <p class="card-sub">Мульти-мітки: скануємо весь бриф (назву + повний текст нотаток), тому одна задача може одночасно рахуватись у кількох категоріях (банер + пуш + Telegram в одному брифі — це +1 у кожну). % — це частка від УСІХ задач, тому стовпці не сумуються до 100%</p>
       <div id="categoryChart"></div>
       <div class="note" style="margin-top:14px">
         <b>Категорії та ключові слова (чернетка):</b>
@@ -391,7 +391,7 @@
           <li><b>Картки товару</b> — «картк(а/и)»</li>
           <li><b>Категорії</b> — «категор…»</li>
           <li><b>Сторінки сайту</b> — «сторінк…», «посадков…», «лендінг»</li>
-          <li><b>Акції</b> — «ціна», «знижк…», «акці…», «промо», «лейб…», «цінник»</li>
+          <li><b>Акції</b> — «ціна», «знижк…», «акці…», «промо», «лейб…», «цінник», «ціно…», «креатив»</li>
           <li><b>Адаптація + ресайзи</b> — «адаптац…», «ресайз…»</li>
           <li><b>Технічне адміністрування</b> — «видал…», «прибрат…», «правк…», «заміна», «товар», «сайт» (залишкові адмін-правки)</li>
           <li><b>РКТ</b> — «РКТ», «РЛ» / «RL»</li>
@@ -399,10 +399,7 @@
           <li><b>Атрибути</b> — «атрибут…»</li>
         </ul>
         <div style="margin-top:10px">
-          <b>Інше / не визначено (19.8%, 665 задач)</b> — найбільша «категорія», але це не реальний тип роботи: сюди потрапляють задачі без явних маркерів у назві («Креатив Х», «Нічний ЦІНОкач», назви лише з датою/артикулом тощо). Знизити цю частку можна, додаючи короткий тег типу задачі при постановці.
-        </div>
-        <div style="margin-top:6px">
-          Також маю обмеження: опис задачі (нотатки) часто містить повний бриф одразу на кілька каналів (банер + пуш + Telegram + ресайзи в одному тексті) — тому класифікація спирається переважно на назву задачі, а нотатки використовуються, лише якщо назва не дала сигналу.
+          <b>Інше / не визначено</b> — задачі, де жоден з ключових маркерів не знайдено ні в назві, ні в нотатках (назви лише з датою/артикулом тощо). Знизити цю частку можна, додаючи короткий тег типу задачі при постановці.
         </div>
       </div>
     </div>
@@ -951,27 +948,26 @@ const DESIGN_CATEGORIES = [
   ['Категорії', /категор/],
   ['Картки товару', /картк/],
   ['Сторінки сайту', /сторінк|посадков|лендінг|landing/],
-  ['Акції', /ціна|цін[аиу]|знижк|акці|промо|розпродаж|лейб|цінник/],
+  ['Акції', /ціна|цін[аиу]|ціно|знижк|акці|промо|розпродаж|лейб|цінник|креатив/],
   ['Соцмережі', /тг(?![\p{L}\p{N}_])|телеграм|інста|instagram|facebook|соцмереж/u],
   ['Сайт + додаток', /банер|banner|додаток|додатку|застосунок|\bapp\b/],
   ['Технічне адміністрування', /видал|прибрат|включит|закрыт|правк|замен|заміна|змін|подвяз|перенаправ|конфігуратор|товар|сайт/],
 ];
 const DESIGN_OTHER = 'Інше / не визначено';
 
-function classifyDesignText(text) {
-  const t = (text || '').toLowerCase();
+// Multi-label: a brief often covers several channels at once ("банер + пуш + Telegram +
+// ресайзи" in one note), so a task can legitimately belong to more than one category. Scans
+// the FULL name+note text (not just the name, not just the note's first line) and returns every
+// category with a matching signal — "Інше" only when literally none of them hit. Because of
+// this, category_dist counts (and %) are per-category shares of *all tasks*, not a partition —
+// they don't have to sum to 100%.
+function classifyDesignTaskMulti(name, note) {
+  const t = `${name || ''}\n${note || ''}`.toLowerCase();
+  const labels = [];
   for (const [label, re] of DESIGN_CATEGORIES) {
-    if (re.test(t)) return label;
+    if (re.test(t)) labels.push(label);
   }
-  return null;
-}
-function classifyDesignTask(name, note) {
-  const r1 = classifyDesignText(name);
-  if (r1) return r1;
-  const firstLine = (note || '').split('\n')[0].slice(0, 120);
-  const r2 = classifyDesignText(firstLine);
-  if (r2) return r2;
-  return DESIGN_OTHER;
+  return labels.length ? labels : [DESIGN_OTHER];
 }
 
 const DESIGNERS = [
@@ -999,7 +995,7 @@ function aggregateDesign(records) {
     ...r,
     _created: parseAnyDate(r['Дата создания']),
     _completed: parseAnyDate(r['Завершена']),
-    _category: classifyDesignTask(r['Имя задачи'], r['Заметки']),
+    _categories: classifyDesignTaskMulti(r['Имя задачи'], r['Заметки']),
     _assignees: (r[' Назначена пользователю'] || '').split(';').map(s => s.trim()).filter(Boolean),
   })).filter(r => r._created);
 
@@ -1059,7 +1055,7 @@ function aggregateDesign(records) {
     .sort((a, b) => b.active - a.active || b.total - a.total);
 
   const categoryDist = {};
-  for (const r of rows) categoryDist[r._category] = (categoryDist[r._category] || 0) + 1;
+  for (const r of rows) for (const cat of r._categories) categoryDist[cat] = (categoryDist[cat] || 0) + 1;
 
   const priorityDist = {};
   for (const r of rows) { const p = r['Приоритет']; priorityDist[p] = (priorityDist[p] || 0) + 1; }
@@ -1423,7 +1419,7 @@ if (typeof module !== 'undefined') {
     parseAnyDate, monthKey, businessDaysBetween, monthRange, capacityHoursByMonth,
     mondayOf, weekKey, weekRange,
     buildPersonInsightsFor, buildYearlyViews,
-    classifyDesignTask, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
+    classifyDesignTaskMulti, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
     classifyStream, aggregateProject, computeForecast, computeProjectStatus, yearEndDeadline,
     bucketForListName, isOnHoldListName, isBlockerLabel,
     parseCsvText, genericRowsToTrelloShape,
@@ -1699,9 +1695,11 @@ if (typeof module !== 'undefined') {
   }
 
   // ---------- Category chart ----------
-  function renderCategoryChart(targetId, categoryDist) {
+  // `totalTasks` (not the sum of category counts) is the % denominator — a task can carry more
+  // than one label since the brief is scanned in full, so the bars intentionally don't sum to 100%.
+  function renderCategoryChart(targetId, categoryDist, totalTasks) {
     const entries = Object.entries(categoryDist).sort((a,b) => b[1]-a[1]);
-    const total = entries.reduce((s,e) => s+e[1], 0);
+    const total = totalTasks;
     const max = Math.max(...entries.map(e => e[1]));
     const palette = [cvar('--series-1'), cvar('--series-2'), cvar('--series-3'), cvar('--series-4'), cvar('--series-5'), cvar('--series-6'), cvar('--series-7'), cvar('--series-8')];
     let colorIdx = 0;
@@ -1819,7 +1817,7 @@ if (typeof module !== 'undefined') {
     ]);
     renderStageChart('stageChart', data.segment_active, 170, stageColors);
     renderDesignerTable('designerTable', data.designer_table);
-    renderCategoryChart('categoryChart', data.category_dist);
+    renderCategoryChart('categoryChart', data.category_dist, data.meta.total_tasks);
 
     const years = Object.keys(data.by_year).sort();
     renderPeriodChart('sumChartWrap', 'yearSelectDesignSum', 'granularityDesignSum', 'periodDeltaDesign', data, ' (створено+завершено)');
