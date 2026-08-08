@@ -395,7 +395,7 @@
     </div>
 
     <div class="card">
-      <h2>Дизайнери — деталізація</h2>
+      <h2>Дизайнери та адміністратори — деталізація</h2>
       <p class="card-sub">Активні задачі зараз і загальний обсяг за весь період (18.01–17.07.2026)</p>
       <div class="chart-scroll">
         <table class="data-table" id="designerTable"></table>
@@ -416,7 +416,7 @@
           <li><b>Сторінки сайту</b> — «сторінк…», «посадков…», «лендінг»</li>
           <li><b>Акції</b> — «ціна», «знижк…», «акці…», «промо», «лейб…», «цінник», «ціно…», «креатив»</li>
           <li><b>Адаптація + ресайзи</b> — «адаптац…», «ресайз…»</li>
-          <li><b>Технічне адміністрування</b> — «видал…», «прибрат…», «правк…», «заміна», «товар», «сайт» (залишкові адмін-правки)</li>
+          <li><b>Технічне адміністрування</b> — тільки: розміщення CMS-блоків, заміна банерів у лего-шопі, брендування, іконки в категоріях («цмс/CMS», «лего-шоп», «брендуванн…», «іконк…»)</li>
           <li><b>РКТ</b> — «РКТ», «РЛ» / «RL»</li>
           <li><b>Розсилки + пуші</b> — «пуш», «розсилк…», «email»</li>
           <li><b>Атрибути</b> — «атрибут…»</li>
@@ -992,7 +992,7 @@ const DESIGN_CATEGORIES = [
   ['Акції', /ціна|цін[аиу]|ціно|знижк|акці|промо|розпродаж|лейб|цінник|креатив/],
   ['Соцмережі', /тг(?![\p{L}\p{N}_])|телеграм|інста|instagram|facebook|соцмереж/u],
   ['Сайт + додаток', /банер|banner|додаток|додатку|застосунок|\bapp\b/],
-  ['Технічне адміністрування', /видал|прибрат|включит|закрыт|правк|замен|заміна|змін|подвяз|перенаправ|конфігуратор|товар|сайт/],
+  ['Технічне адміністрування', /цмс|\bcms\b|лего.?шоп|брендуванн|іконк/],
 ];
 const DESIGN_OTHER = 'Інше / не визначено';
 
@@ -1954,7 +1954,7 @@ if (typeof module !== 'undefined') {
 
   // Both sides always compare at the SAME granularity (both months, or both years) — mixing them
   // has no sane shared x-axis (a month's x-axis is week-of-month, a year's is month-of-year).
-  function setupCompare(prefix, data, tooltipSuffix, wrapId, onExitCompare) {
+  function setupCompare(prefix, data, tooltipSuffix, wrapId, deltaId, onExitCompare) {
     const toggle = document.getElementById(`compareToggle${prefix}`);
     const row = document.getElementById(`compareRow${prefix}`);
     const gran = document.getElementById(`compareGran${prefix}`);
@@ -1983,6 +1983,15 @@ if (typeof module !== 'undefined') {
         allPositions.forEach(p => labels[p] = `тижд. ${p}`);
       }
       renderCompareChart(wrapId, allPositions, labels, a.values, b.values, a.name, b.name, tooltipSuffix);
+
+      const deltaEl = document.getElementById(deltaId);
+      if (deltaEl) {
+        const sumA = Object.values(a.values).reduce((s, v) => s + v, 0);
+        const sumB = Object.values(b.values).reduce((s, v) => s + v, 0);
+        const diff = sumA - sumB;
+        const pctText = sumB ? ` (${diff > 0 ? '+' : ''}${Math.round(diff / sumB * 1000) / 10}%)` : '';
+        deltaEl.innerHTML = `Порівняння: <b>${a.name}</b> (${sumA}) проти <b>${b.name}</b> (${sumB}) — різниця ${diff >= 0 ? '+' : ''}${diff}${pctText}`;
+      }
     }
     gran.onchange = () => { populateValues(); renderCompare(); };
     [valA, valB].forEach(sel => sel.onchange = renderCompare);
@@ -2069,7 +2078,7 @@ if (typeof module !== 'undefined') {
 
     const years = Object.keys(data.by_year).sort();
     renderPeriodChart('sumChartWrap', 'yearSelectDesignSum', 'granularityDesignSum', 'periodDeltaDesign', data, ' (створено+завершено)');
-    setupCompare('Design', data, ' (створено+завершено)', 'sumChartWrap',
+    setupCompare('Design', data, ' (створено+завершено)', 'sumChartWrap', 'periodDeltaDesign',
       () => renderPeriodChart('sumChartWrap', 'yearSelectDesignSum', 'granularityDesignSum', 'periodDeltaDesign', data, ' (створено+завершено)'));
     wireYearSelect('yearSelectDesignWorkload', years, data.current_year, (year) => {
       const yd = data.by_year[year];
@@ -2095,7 +2104,7 @@ if (typeof module !== 'undefined') {
 
     const years = Object.keys(data.by_year).sort();
     renderPeriodChart('sumChartWrapUx', 'yearSelectUxSum', 'granularityUxSum', 'periodDeltaUx', data, ' задач створено');
-    setupCompare('Ux', data, ' задач створено', 'sumChartWrapUx',
+    setupCompare('Ux', data, ' задач створено', 'sumChartWrapUx', 'periodDeltaUx',
       () => renderPeriodChart('sumChartWrapUx', 'yearSelectUxSum', 'granularityUxSum', 'periodDeltaUx', data, ' задач створено'));
     wireYearSelect('yearSelectUxWorkload', years, data.current_year, (year) => {
       const yd = data.by_year[year];
