@@ -1362,11 +1362,14 @@ function isForecastExcluded(labelNames) {
   return labelNames.some(l => FORECAST_EXCLUDE_LABELS.has(l));
 }
 
-function computeEffortForecast(cards, labelsById, listsById, actions, nowMs) {
-  const cardById = {};
+// Deliberately NOT velocity-based (no dependency on historical DONE cards also carrying a size
+// label, which barely any do yet — S/M/L was only just introduced). This is the simplest
+// estimate-driven date there is: "if the still-open, labeled backlog were worked sequentially
+// starting today, one day of estimate per calendar day, it lands here." Coarser than a real
+// velocity model, but it's available immediately instead of waiting for label history to build up.
+function computeEffortForecast(cards, labelsById, listsById, nowMs) {
   let backlogDays = 0, backlogLabeled = 0, backlogTotal = 0;
   for (const c of cards) {
-    cardById[c.id] = c;
     const listName = listsById[c.idList] || 'UNKNOWN';
     if (bucketForListName(listName) === 'done') continue;
     const labelNames = (c.idLabels || []).map(id => labelsById[id]).filter(Boolean);
@@ -1375,39 +1378,8 @@ function computeEffortForecast(cards, labelsById, listsById, actions, nowMs) {
     const est = sizeEstimateFor(labelNames);
     if (est != null) { backlogDays += est; backlogLabeled++; }
   }
-
-  const base = { backlog_days: backlogDays, backlog_labeled: backlogLabeled, backlog_total: backlogTotal, has_velocity: false };
-
-  const doneEvents = [];
-  for (const a of actions || []) {
-    if (a.type !== 'updateCard') continue;
-    const listAfter = a.data && a.data.listAfter;
-    if (!listAfter || listAfter.name !== 'DONE' || !a.date) continue;
-    const cardId = a.data.card && a.data.card.id;
-    doneEvents.push({ date: new Date(a.date).getTime(), card: cardId ? cardById[cardId] : null });
-  }
-  if (doneEvents.length < 2) return base;
-  doneEvents.sort((x, y) => x.date - y.date);
-  const windowStart = doneEvents[0].date, windowEnd = Math.max(doneEvents[doneEvents.length - 1].date, nowMs);
-  const windowDays = Math.max((windowEnd - windowStart) / 86400000, 1);
-
-  let effortDays = 0, effortLabeledMoves = 0;
-  for (const e of doneEvents) {
-    if (!e.card) continue;
-    const est = sizeEstimateFor((e.card.idLabels || []).map(id => labelsById[id]).filter(Boolean));
-    if (est != null) { effortDays += est; effortLabeledMoves++; }
-  }
-  if (effortLabeledMoves < 2) return base;
-
-  const velocityDaysPerWeek = effortDays / (windowDays / 7);
-  const weeksToFinish = velocityDaysPerWeek > 0 ? backlogDays / velocityDaysPerWeek : null;
-  return {
-    ...base, has_velocity: true,
-    velocity_days_per_week: Math.round(velocityDaysPerWeek * 10) / 10,
-    effort_labeled_moves: effortLabeledMoves, window_days: Math.round(windowDays),
-    weeks_to_finish: weeksToFinish !== null ? Math.round(weeksToFinish * 10) / 10 : null,
-    projected_date: weeksToFinish !== null ? windowEnd + weeksToFinish * 7 * 86400000 : null,
-  };
+  const projectedDate = backlogLabeled > 0 ? nowMs + backlogDays * 86400000 : null;
+  return { backlog_days: backlogDays, backlog_labeled: backlogLabeled, backlog_total: backlogTotal, projected_date: projectedDate };
 }
 
 // `nowMs` is injected (not read from Date.now() internally) so this stays testable/deterministic.
@@ -1453,7 +1425,7 @@ function aggregateProject(trelloJson, nowMs) {
     return !isForecastExcluded(labelNames);
   }).length;
   const forecast = computeForecast(trelloJson.actions || [], remainingForForecast, nowMs);
-  const effortForecast = computeEffortForecast(cards, labelsById, listsById, trelloJson.actions || [], nowMs);
+  const effortForecast = computeEffortForecast(cards, labelsById, listsById, nowMs);
   const status = computeProjectStatus(activeBlockedCount, forecast, nowMs);
   const recommendation = buildSpeedRecommendation(streams, forecast);
 
@@ -2173,23 +2145,23 @@ if (typeof module !== 'undefined') {
     if (f.has_data) {
       rows.push(`<div class="f-row"><span class="f-label">Швидкість (${f.window_days} дн., ${f.done_moves} задач у DONE):</span><b>${f.velocity_per_week} задач/тиждень</b></div>`);
     }
-    rows.push(`<div class="f-row"><span class="f-label">Залишилось задач (в роботі + нові, без V4):</span><b>${f.remaining}</b></div>`);
+    const totalRemaining = p.totals.in_progress + p.totals.new;
+    rows.push(`<div class="f-row"><span class="f-label">Залишилось задач (в роботі + нові):</span><b>${totalRemaining}</b></div>`);
     if (ef && ef.backlog_total > 0) {
-      rows.push(`<div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${ef.backlog_labeled} з ${ef.backlog_total} мають мітку):</span><b>${ef.backlog_days} дн.</b></div>`);
-      rows.push(`<div class="f-row"><span class="f-label">Швидкість за оцінками:</span><b>${ef.has_velocity ? ef.velocity_days_per_week + ' дн./тиждень' : 'недостатньо позначених виконаних задач у історії дій — з\'явиться, коли DONE-задачі накопичать мітки'}</b></div>`);
+      rows.push(`<div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${ef.backlog_labeled} з ${ef.backlog_total} мають мітку, без V4):</span><b>${ef.backlog_days} дн.</b></div>`);
+      if (ef.projected_date !== null) {
+        const onTimeEf = ef.projected_date <= deadline;
+        rows.push(`<div class="f-row"><span class="f-label">Прогноз завершення за оцінками:</span><b style="color:${onTimeEf ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(ef.projected_date)} · план до ${fmtDate(deadline)} (${onTimeEf ? 'встигаємо' : 'ризик запізнення'})</b></div>`);
+      }
     }
-
-    const useEffort = ef && ef.has_velocity;
-    const projectedDate = useEffort ? ef.projected_date : (f.has_data ? f.projected_date : null);
-    const methodNote = useEffort ? ' (за оцінками S/M/L)' : (f.has_data ? ' (за кількістю задач — оцінки ще недостатньо накопичені)' : '');
-    let finishRow;
-    if (projectedDate === null) {
-      finishRow = `<div class="f-row"><span class="f-label">Прогноз завершення:</span><b>${f.remaining === 0 ? 'усі задачі вже виконано' : 'недостатньо історії переміщень у DONE для розрахунку швидкості'}</b></div>`;
+    // Always its own line, driven purely by f.velocity_per_week — recalculates on its own the next
+    // time this runs, with whatever the DONE history says then (e.g. 8.4/тиждень instead of 7.7).
+    if (f.has_data && f.projected_date !== null) {
+      const onTime = f.projected_date <= deadline;
+      rows.push(`<div class="f-row"><span class="f-label">Прогноз завершення за швидкістю задач:</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(f.projected_date)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>`);
     } else {
-      const onTime = projectedDate <= deadline;
-      finishRow = `<div class="f-row"><span class="f-label">Прогноз завершення${methodNote}:</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(projectedDate)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>`;
+      rows.push(`<div class="f-row"><span class="f-label">Прогноз завершення за швидкістю задач:</span><b>${f.remaining === 0 ? 'усі задачі вже виконано' : 'недостатньо історії переміщень у DONE для розрахунку швидкості'}</b></div>`);
     }
-    rows.push(finishRow);
 
     return `<div class="forecast-box">${rows.join('')}${reco}</div>`;
   }
