@@ -115,6 +115,11 @@
   .granularity-toggle button.active { background: var(--brand-green); color: #fff; }
   .period-delta { font-size: 12.5px; color: var(--text-secondary); margin-top: 8px; }
   .period-delta b { color: var(--text-primary); }
+  .compare-toggle.active { background: var(--brand-green); color: #fff; border-color: var(--brand-green); }
+  .compare-row { display: flex; gap: 24px; flex-wrap: wrap; margin: 4px 0 14px; padding: 10px 12px; background: var(--page-plane); border: 1px solid var(--border); border-radius: 8px; }
+  .compare-side { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
+  .compare-legend { display: flex; gap: 16px; margin: 8px 0; font-size: 11.5px; color: var(--text-muted); }
+  .compare-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
   .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; }
   .people-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 
@@ -334,9 +339,27 @@
             <button data-g="year">Рік</button>
           </div>
           <select class="year-select" id="yearSelectDesignSum"></select>
+          <button class="export-btn compare-toggle" id="compareToggleDesign">🔀 Порівняти</button>
         </div>
       </div>
       <p class="card-sub">Створено + завершено (сумарно) · перший і останній період можуть бути неповними</p>
+      <div class="compare-row" id="compareRowDesign" hidden>
+        <div class="compare-side">
+          <span>Порівнювати по:</span>
+          <select class="year-select" id="compareGranDesign">
+            <option value="year">Рік</option>
+            <option value="month" selected>Місяць</option>
+          </select>
+        </div>
+        <div class="compare-side">
+          <span>Період А:</span>
+          <select class="year-select" id="compareAValueDesign"></select>
+        </div>
+        <div class="compare-side">
+          <span>Період Б:</span>
+          <select class="year-select" id="compareBValueDesign"></select>
+        </div>
+      </div>
       <div class="chart-scroll">
         <div class="chart-wrap" id="sumChartWrap"></div>
       </div>
@@ -438,9 +461,27 @@
             <button data-g="year">Рік</button>
           </div>
           <select class="year-select" id="yearSelectUxSum"></select>
+          <button class="export-btn compare-toggle" id="compareToggleUx">🔀 Порівняти</button>
         </div>
       </div>
       <p class="card-sub">Дата резолюції заповнена лише у 16 з 236 задач, тому окремо не додаємо — рахуємо тільки створені · перший і останній період можуть бути неповними</p>
+      <div class="compare-row" id="compareRowUx" hidden>
+        <div class="compare-side">
+          <span>Порівнювати по:</span>
+          <select class="year-select" id="compareGranUx">
+            <option value="year">Рік</option>
+            <option value="month" selected>Місяць</option>
+          </select>
+        </div>
+        <div class="compare-side">
+          <span>Період А:</span>
+          <select class="year-select" id="compareAValueUx"></select>
+        </div>
+        <div class="compare-side">
+          <span>Період Б:</span>
+          <select class="year-select" id="compareBValueUx"></select>
+        </div>
+      </div>
       <div class="chart-scroll">
         <div class="chart-wrap" id="sumChartWrapUx"></div>
       </div>
@@ -1810,6 +1851,130 @@ if (typeof module !== 'undefined') {
     return `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 
+  // Two-line variant of renderSumChart, for the "Порівняти" overlay — same axes/grid/tooltip
+  // machinery, just two paths (A solid green, Б dashed orange) sharing one set of x positions.
+  function renderCompareChart(wrapId, positions, labels, valuesA, valuesB, nameA, nameB, tooltipSuffix) {
+    const wrap = document.getElementById(wrapId);
+    const w = Math.max(700, positions.length * 60), h = 260;
+    const padL = 46, padR = 24, padT = 30, padB = 30;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const a = positions.map(p => valuesA[p] || 0);
+    const b = positions.map(p => valuesB[p] || 0);
+    const maxV = Math.ceil(Math.max(...a, ...b, 1) / 200) * 200 || 1;
+    const xStep = positions.length > 1 ? plotW / (positions.length - 1) : 0;
+    const yScale = v => padT + plotH - (v / maxV) * plotH;
+    const xScale = i => padL + i * xStep;
+
+    const gridLines = [0,0.25,0.5,0.75,1].map(f => {
+      const y = padT + plotH * (1 - f);
+      const val = Math.round(maxV * f);
+      return `<line class="grid-line" x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}"/>
+              <text x="${padL-8}" y="${y+3}" text-anchor="end">${val}</text>`;
+    }).join('');
+    const pathFor = (vals) => vals.map((v,i) => `${i===0?'M':'L'}${xScale(i)},${yScale(v)}`).join(' ');
+    const pointsFor = (vals, cls, color) => vals.map((v,i) => `
+      <circle class="${cls}" data-i="${i}" cx="${xScale(i)}" cy="${yScale(v)}" r="4" fill="${color}"/>`).join('');
+    const xLabels = positions.map((p,i) => `<text x="${xScale(i)}" y="${h-8}" text-anchor="middle">${labels[p]||p}</text>`).join('');
+
+    const colorA = cvar('--brand-green'), colorB = cvar('--brand-orange');
+    const svg = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block; width:100%; height:auto">
+      ${gridLines}
+      <line class="axis-line" x1="${padL}" x2="${w-padR}" y1="${padT+plotH}" y2="${padT+plotH}"/>
+      <path d="${pathFor(a)}" fill="none" stroke="${colorA}" stroke-width="3"/>
+      <path d="${pathFor(b)}" fill="none" stroke="${colorB}" stroke-width="2.5" stroke-dasharray="6,4"/>
+      ${pointsFor(a, 'cmp-a', colorA)}
+      ${pointsFor(b, 'cmp-b', colorB)}
+      ${xLabels}
+    </svg>`;
+    wrap.innerHTML = `<div class="compare-legend">
+        <span><span class="dot" style="background:${colorA}"></span>${nameA}</span>
+        <span><span class="dot" style="background:${colorB}"></span>${nameB}</span>
+      </div>${svg}`;
+    const tip = makeTooltip(wrap);
+    wrap.querySelectorAll('circle').forEach(c => {
+      c.style.cursor = 'pointer';
+      c.addEventListener('mouseenter', () => {
+        const i = +c.dataset.i;
+        const isA = c.classList.contains('cmp-a');
+        const rect = wrap.getBoundingClientRect();
+        const cx = (+c.getAttribute('cx')) / w * rect.width;
+        const cy = (+c.getAttribute('cy')) / h * rect.height;
+        const label = isA ? nameA : nameB;
+        const v = isA ? a[i] : b[i];
+        tip.show(cx, cy, `<b>${labels[positions[i]]||positions[i]}</b> · ${label}: ${v}${tooltipSuffix}`);
+      });
+      c.addEventListener('mouseleave', () => tip.hide());
+    });
+  }
+
+  // "Період А"/"Період Б" selectors resolve to an aligned {positions, labels, values} series so
+  // two different years or two different months can share one x-axis: Рік -> 12 points position by
+  // month-of-year (Jan vs Jan, Feb vs Feb, ...); Місяць -> N points positioned by week-of-month
+  // (this month's 1st week vs that month's 1st week, ...) since the two months rarely start on the
+  // same weekday.
+  function resolveComparePeriod(data, granularity, value) {
+    if (granularity === 'year') {
+      const yd = data.by_year[value];
+      if (!yd) return null;
+      const values = {};
+      yd.months.forEach(m => { values[m.slice(5, 7)] = yd.monthly_sum[m]; });
+      return { name: value, values };
+    }
+    // month: value is a 'YYYY-MM' key from data.months
+    const weeksInMonth = data.weeks.filter(w => monthKeyOfWeek(w) === value);
+    const values = {};
+    weeksInMonth.forEach((w, i) => { values[String(i + 1)] = data.weekly_sum[w]; });
+    return { name: buildMonthLabels([value])[value] || value, values };
+  }
+  function monthKeyOfWeek(weekKeyStr) {
+    // A week is keyed by its Monday's date; approximate "which month it belongs to" by that
+    // Monday's own month — good enough for grouping, doesn't need to match the pipeline exactly.
+    return weekKeyStr.slice(0, 7);
+  }
+
+  // Both sides always compare at the SAME granularity (both months, or both years) — mixing them
+  // has no sane shared x-axis (a month's x-axis is week-of-month, a year's is month-of-year).
+  function setupCompare(prefix, data, tooltipSuffix, wrapId, onExitCompare) {
+    const toggle = document.getElementById(`compareToggle${prefix}`);
+    const row = document.getElementById(`compareRow${prefix}`);
+    const gran = document.getElementById(`compareGran${prefix}`);
+    const valA = document.getElementById(`compareAValue${prefix}`), valB = document.getElementById(`compareBValue${prefix}`);
+    if (!toggle) return;
+
+    const years = Object.keys(data.by_year).sort();
+    const monthOptions = data.months.map(m => `<option value="${m}">${buildMonthLabels([m])[m]}</option>`).join('');
+    const yearOptions = years.map(y => `<option value="${y}">${y}</option>`).join('');
+
+    function populateValues() {
+      const opts = gran.value === 'year' ? yearOptions : monthOptions;
+      valA.innerHTML = opts; valB.innerHTML = opts;
+      if (valA.options.length > 1) valA.selectedIndex = valA.options.length - 2;
+      if (valB.options.length > 0) valB.selectedIndex = valB.options.length - 1;
+    }
+    function renderCompare() {
+      const a = resolveComparePeriod(data, gran.value, valA.value);
+      const b = resolveComparePeriod(data, gran.value, valB.value);
+      if (!a || !b) return;
+      const allPositions = [...new Set([...Object.keys(a.values), ...Object.keys(b.values)])].sort();
+      const labels = {};
+      if (gran.value === 'year') {
+        allPositions.forEach(p => labels[p] = UX_MONTH_NAMES[p] || p);
+      } else {
+        allPositions.forEach(p => labels[p] = `тижд. ${p}`);
+      }
+      renderCompareChart(wrapId, allPositions, labels, a.values, b.values, a.name, b.name, tooltipSuffix);
+    }
+    gran.onchange = () => { populateValues(); renderCompare(); };
+    [valA, valB].forEach(sel => sel.onchange = renderCompare);
+    populateValues();
+
+    toggle.onclick = () => {
+      const active = toggle.classList.toggle('active');
+      row.hidden = !active;
+      if (active) renderCompare(); else onExitCompare();
+    };
+  }
+
   // Drives the "Задачі за період" chart: a Тиждень/Місяць/Рік granularity toggle plus the
   // existing year dropdown (hidden in Рік mode, where there's nothing to scope to — one point
   // per year already is the year-over-year comparison). Reuses renderSumChart unchanged; it
@@ -1884,6 +2049,8 @@ if (typeof module !== 'undefined') {
 
     const years = Object.keys(data.by_year).sort();
     renderPeriodChart('sumChartWrap', 'yearSelectDesignSum', 'granularityDesignSum', 'periodDeltaDesign', data, ' (створено+завершено)');
+    setupCompare('Design', data, ' (створено+завершено)', 'sumChartWrap',
+      () => renderPeriodChart('sumChartWrap', 'yearSelectDesignSum', 'granularityDesignSum', 'periodDeltaDesign', data, ' (створено+завершено)'));
     wireYearSelect('yearSelectDesignWorkload', years, data.current_year, (year) => {
       const yd = data.by_year[year];
       renderPeopleGrid('peopleGridDesigners', DESIGNERS, yd.person_monthly, yd.person_insights, yd.months, buildMonthLabels(yd.months));
@@ -1908,6 +2075,8 @@ if (typeof module !== 'undefined') {
 
     const years = Object.keys(data.by_year).sort();
     renderPeriodChart('sumChartWrapUx', 'yearSelectUxSum', 'granularityUxSum', 'periodDeltaUx', data, ' задач створено');
+    setupCompare('Ux', data, ' задач створено', 'sumChartWrapUx',
+      () => renderPeriodChart('sumChartWrapUx', 'yearSelectUxSum', 'granularityUxSum', 'periodDeltaUx', data, ' задач створено'));
     wireYearSelect('yearSelectUxWorkload', years, data.current_year, (year) => {
       const yd = data.by_year[year];
       renderPeopleGrid('peopleGridUx', UX_PEOPLE, yd.person_monthly, yd.person_insights, yd.months, buildMonthLabels(yd.months));
