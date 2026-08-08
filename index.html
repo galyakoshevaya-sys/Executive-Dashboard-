@@ -1296,6 +1296,68 @@ function emptyBucketCounts() {
   return { total: 0, done: 0, in_progress: 0, new: 0, blocked: 0, on_hold: 0 };
 }
 
+// T-shirt-size effort estimates (days), added as ordinary card labels on top of stream/BLOCKER
+// labels. Matched as exact Latin "S"/"M"/"L" on purpose — this board's other single-letter labels
+// (М, Б, Ф, А, Я) are Cyrillic look-alikes of *different* letters, not estimate tags, and a naive
+// case-insensitive match could confuse them.
+const SIZE_ESTIMATE_DAYS = { S: 2, M: 5, L: 20 };
+function sizeEstimateFor(labelNames) {
+  for (const l of labelNames) if (Object.prototype.hasOwnProperty.call(SIZE_ESTIMATE_DAYS, l)) return SIZE_ESTIMATE_DAYS[l];
+  return null;
+}
+
+// Backlog effort (sum of S/M/L days across still-open cards) needs no history — it's just today's
+// snapshot. Velocity (days of estimated work actually completed per week) needs the same
+// move-to-DONE action log as computeForecast, but weighted by each card's size label instead of
+// counting every card as one unit — so a week that clears one "L" reads as 20 days of progress,
+// not 1. Only labeled cards count on both sides, so coverage (backlog_labeled/backlog_total) is
+// reported alongside — this is a plan estimate, not a fact, until most cards carry a size label.
+function computeEffortForecast(cards, labelsById, listsById, actions, nowMs) {
+  const cardById = {};
+  let backlogDays = 0, backlogLabeled = 0, backlogTotal = 0;
+  for (const c of cards) {
+    cardById[c.id] = c;
+    const listName = listsById[c.idList] || 'UNKNOWN';
+    if (bucketForListName(listName) === 'done') continue;
+    backlogTotal++;
+    const est = sizeEstimateFor((c.idLabels || []).map(id => labelsById[id]).filter(Boolean));
+    if (est != null) { backlogDays += est; backlogLabeled++; }
+  }
+
+  const base = { backlog_days: backlogDays, backlog_labeled: backlogLabeled, backlog_total: backlogTotal, has_velocity: false };
+
+  const doneEvents = [];
+  for (const a of actions || []) {
+    if (a.type !== 'updateCard') continue;
+    const listAfter = a.data && a.data.listAfter;
+    if (!listAfter || listAfter.name !== 'DONE' || !a.date) continue;
+    const cardId = a.data.card && a.data.card.id;
+    doneEvents.push({ date: new Date(a.date).getTime(), card: cardId ? cardById[cardId] : null });
+  }
+  if (doneEvents.length < 2) return base;
+  doneEvents.sort((x, y) => x.date - y.date);
+  const windowStart = doneEvents[0].date, windowEnd = Math.max(doneEvents[doneEvents.length - 1].date, nowMs);
+  const windowDays = Math.max((windowEnd - windowStart) / 86400000, 1);
+
+  let effortDays = 0, effortLabeledMoves = 0;
+  for (const e of doneEvents) {
+    if (!e.card) continue;
+    const est = sizeEstimateFor((e.card.idLabels || []).map(id => labelsById[id]).filter(Boolean));
+    if (est != null) { effortDays += est; effortLabeledMoves++; }
+  }
+  if (effortLabeledMoves < 2) return base;
+
+  const velocityDaysPerWeek = effortDays / (windowDays / 7);
+  const weeksToFinish = velocityDaysPerWeek > 0 ? backlogDays / velocityDaysPerWeek : null;
+  return {
+    ...base, has_velocity: true,
+    velocity_days_per_week: Math.round(velocityDaysPerWeek * 10) / 10,
+    effort_labeled_moves: effortLabeledMoves, window_days: Math.round(windowDays),
+    weeks_to_finish: weeksToFinish !== null ? Math.round(weeksToFinish * 10) / 10 : null,
+    projected_date: weeksToFinish !== null ? windowEnd + weeksToFinish * 7 * 86400000 : null,
+  };
+}
+
 // `nowMs` is injected (not read from Date.now() internally) so this stays testable/deterministic.
 function aggregateProject(trelloJson, nowMs) {
   const labelsById = {};
@@ -1333,6 +1395,7 @@ function aggregateProject(trelloJson, nowMs) {
 
   const activeBlockedCount = blockedCards.filter(c => bucketForListName(c.list) !== 'done').length;
   const forecast = computeForecast(trelloJson.actions || [], totals, nowMs);
+  const effortForecast = computeEffortForecast(cards, labelsById, listsById, trelloJson.actions || [], nowMs);
   const status = computeProjectStatus(activeBlockedCount, forecast, nowMs);
   const recommendation = buildSpeedRecommendation(streams, forecast);
 
@@ -1343,7 +1406,7 @@ function aggregateProject(trelloJson, nowMs) {
     blocked_cards: blockedCards,
     active_blocked_count: activeBlockedCount,
     stale_cards: staleCards,
-    forecast, status, recommendation,
+    forecast, effort_forecast: effortForecast, status, recommendation,
   };
 }
 
@@ -1420,7 +1483,7 @@ if (typeof module !== 'undefined') {
     mondayOf, weekKey, weekRange,
     buildPersonInsightsFor, buildYearlyViews,
     classifyDesignTaskMulti, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
-    classifyStream, aggregateProject, computeForecast, computeProjectStatus, yearEndDeadline,
+    classifyStream, aggregateProject, computeForecast, computeEffortForecast, computeProjectStatus, yearEndDeadline,
     bucketForListName, isOnHoldListName, isBlockerLabel,
     parseCsvText, genericRowsToTrelloShape,
   };
@@ -1897,6 +1960,29 @@ if (typeof module !== 'undefined') {
     </div>`;
   }
 
+  // Estimate-weighted forecast from S/M/L card labels (2/5/20 days) — separate from the
+  // count-based one above because it answers a different question ("how many days of work is
+  // left", not "how many cards"). Only meaningful once cards actually carry a size label, so both
+  // halves report coverage (X з Y задач) rather than silently assuming unlabeled == 0 days.
+  function effortForecastBoxHtml(p) {
+    const ef = p.effort_forecast;
+    if (!ef || ef.backlog_total === 0) return '';
+    const deadline = yearEndDeadline(Date.now());
+    const coverage = `${ef.backlog_labeled} з ${ef.backlog_total} активних задач мають мітку S/M/L`;
+    if (!ef.has_velocity) {
+      return `<div class="forecast-box">
+        <div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${coverage}):</span><b>${ef.backlog_days} дн.</b></div>
+        <div class="f-row"><span class="f-label">Швидкість за оцінками:</span><b>недостатньо позначених виконаних задач у історії дій</b></div>
+      </div>`;
+    }
+    const onTime = ef.projected_date !== null && ef.projected_date <= deadline;
+    return `<div class="forecast-box">
+      <div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${coverage}):</span><b>${ef.backlog_days} дн.</b></div>
+      <div class="f-row"><span class="f-label">Швидкість (${ef.window_days} дн., ${ef.effort_labeled_moves} позначених задач у DONE):</span><b>${ef.velocity_days_per_week} дн./тиждень</b></div>
+      <div class="f-row"><span class="f-label">Прогноз завершення за оцінками:</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(ef.projected_date)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>
+    </div>`;
+  }
+
   function renderProjectsTab(projects) {
     const totals = { total: 0, done: 0, in_progress: 0, new: 0, blocked: 0, on_hold: 0 };
     let activeBlockedCount = 0;
@@ -1990,6 +2076,7 @@ if (typeof module !== 'undefined') {
         <div class="project-body">
           ${streamRows}
           ${forecastBoxHtml(p)}
+          ${effortForecastBoxHtml(p)}
           ${blockedHtml}
           ${staleHtml}
         </div>
