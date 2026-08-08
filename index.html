@@ -1353,6 +1353,15 @@ function sizeEstimateFor(labelNames) {
 // counting every card as one unit — so a week that clears one "L" reads as 20 days of progress,
 // not 1. Only labeled cards count on both sides, so coverage (backlog_labeled/backlog_total) is
 // reported alongside — this is a plan estimate, not a fact, until most cards carry a size label.
+// Lowest-priority backlog ("Пріоритет V4 (найнижчий)") isn't realistically getting worked on
+// soon, so it's excluded from both the count-based and estimate-based forecasts entirely — not
+// just left unlabeled — rather than quietly inflating "what's left" with work nobody plans to
+// start.
+const FORECAST_EXCLUDE_LABELS = new Set(['V4']);
+function isForecastExcluded(labelNames) {
+  return labelNames.some(l => FORECAST_EXCLUDE_LABELS.has(l));
+}
+
 function computeEffortForecast(cards, labelsById, listsById, actions, nowMs) {
   const cardById = {};
   let backlogDays = 0, backlogLabeled = 0, backlogTotal = 0;
@@ -1360,8 +1369,10 @@ function computeEffortForecast(cards, labelsById, listsById, actions, nowMs) {
     cardById[c.id] = c;
     const listName = listsById[c.idList] || 'UNKNOWN';
     if (bucketForListName(listName) === 'done') continue;
+    const labelNames = (c.idLabels || []).map(id => labelsById[id]).filter(Boolean);
+    if (isForecastExcluded(labelNames)) continue;
     backlogTotal++;
-    const est = sizeEstimateFor((c.idLabels || []).map(id => labelsById[id]).filter(Boolean));
+    const est = sizeEstimateFor(labelNames);
     if (est != null) { backlogDays += est; backlogLabeled++; }
   }
 
@@ -1435,7 +1446,13 @@ function aggregateProject(trelloJson, nowMs) {
   staleCards.sort((a, b) => b.days - a.days);
 
   const activeBlockedCount = blockedCards.filter(c => bucketForListName(c.list) !== 'done').length;
-  const forecast = computeForecast(trelloJson.actions || [], totals, nowMs);
+  const remainingForForecast = cards.filter(c => {
+    const listName = listsById[c.idList] || 'UNKNOWN';
+    if (bucketForListName(listName) === 'done') return false;
+    const labelNames = (c.idLabels || []).map(id => labelsById[id]).filter(Boolean);
+    return !isForecastExcluded(labelNames);
+  }).length;
+  const forecast = computeForecast(trelloJson.actions || [], remainingForForecast, nowMs);
   const effortForecast = computeEffortForecast(cards, labelsById, listsById, trelloJson.actions || [], nowMs);
   const status = computeProjectStatus(activeBlockedCount, forecast, nowMs);
   const recommendation = buildSpeedRecommendation(streams, forecast);
@@ -1454,14 +1471,13 @@ function aggregateProject(trelloJson, nowMs) {
 // Velocity is measured from real "moved to DONE" events in the board's action log (Trello
 // exports include at most the last 1000 actions — this is the RECENT pace, not lifetime
 // average, which is the more honest number to forecast from anyway).
-function computeForecast(actions, totals, nowMs) {
+function computeForecast(actions, remaining, nowMs) {
   const doneMoves = [];
   for (const a of actions) {
     if (a.type !== 'updateCard') continue;
     const listAfter = a.data && a.data.listAfter;
     if (listAfter && listAfter.name === 'DONE' && a.date) doneMoves.push(new Date(a.date).getTime());
   }
-  const remaining = totals.in_progress + totals.new;
   if (doneMoves.length < 2) {
     return { has_data: false, remaining, velocity_per_week: null, weeks_to_finish: null, projected_date: null, window_days: 0, done_moves: doneMoves.length };
   }
@@ -1525,6 +1541,7 @@ if (typeof module !== 'undefined') {
     buildPersonInsightsFor, buildYearlyViews,
     classifyDesignTaskMulti, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
     classifyStream, aggregateProject, computeForecast, computeEffortForecast, computeProjectStatus, yearEndDeadline,
+    isForecastExcluded,
     bucketForListName, isOnHoldListName, isBlockerLabel,
     parseCsvText, genericRowsToTrelloShape,
   };
@@ -2141,46 +2158,40 @@ if (typeof module !== 'undefined') {
       <div class="status-key-item"><span class="dot st-${key}"></span>${STATUS_LABELS[key]}</div>`).join('');
   }
 
+  // One box, two ways to get to the same "Прогноз завершення" line: the S/M/L estimate-weighted
+  // date wins once there's enough labeled DONE history to trust it (computeEffortForecast.
+  // has_velocity), otherwise it falls back to the plain count-based date so there's always a
+  // number here — not "wait for history" silence. Both sides exclude V4 (lowest priority, not
+  // realistically being worked on soon) from "what's left" entirely, per computeForecast /
+  // computeEffortForecast already filtering it out at the source.
   function forecastBoxHtml(p) {
-    const f = p.forecast;
+    const f = p.forecast, ef = p.effort_forecast;
     const deadline = yearEndDeadline(Date.now());
-    if (!f.has_data) {
-      const msg = f.remaining === 0
-        ? 'усі задачі вже виконано'
-        : 'недостатньо історії переміщень у DONE для розрахунку швидкості';
-      return `<div class="forecast-box"><div class="f-row"><span class="f-label">Прогноз завершення:</span><b>${msg}</b></div></div>`;
-    }
-    const onTime = f.projected_date !== null && f.projected_date <= deadline;
     const reco = p.recommendation ? `<div class="f-reco">💡 Найбільше ризиків у стрімі «${p.recommendation.stream}» (${p.recommendation.on_hold} на паузі, ${p.recommendation.blocked} з блокером із ${p.recommendation.stream_total} задач у стрімі) — розблокування цих задач найбільше прискорить проєкт.</div>` : '';
-    return `<div class="forecast-box">
-      <div class="f-row"><span class="f-label">Швидкість (${f.window_days} дн., ${f.done_moves} задач у DONE):</span><b>${f.velocity_per_week} задач/тиждень</b></div>
-      <div class="f-row"><span class="f-label">Залишилось задач (в роботі + нові):</span><b>${f.remaining}</b></div>
-      <div class="f-row"><span class="f-label">Прогноз завершення:</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(f.projected_date)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>
-      ${reco}
-    </div>`;
-  }
 
-  // Estimate-weighted forecast from S/M/L card labels (2/5/20 days) — separate from the
-  // count-based one above because it answers a different question ("how many days of work is
-  // left", not "how many cards"). Only meaningful once cards actually carry a size label, so both
-  // halves report coverage (X з Y задач) rather than silently assuming unlabeled == 0 days.
-  function effortForecastBoxHtml(p) {
-    const ef = p.effort_forecast;
-    if (!ef || ef.backlog_total === 0) return '';
-    const deadline = yearEndDeadline(Date.now());
-    const coverage = `${ef.backlog_labeled} з ${ef.backlog_total} активних задач мають мітку S/M/L`;
-    if (!ef.has_velocity) {
-      return `<div class="forecast-box">
-        <div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${coverage}):</span><b>${ef.backlog_days} дн.</b></div>
-        <div class="f-row"><span class="f-label">Швидкість за оцінками:</span><b>недостатньо позначених виконаних задач у історії дій</b></div>
-      </div>`;
+    const rows = [];
+    if (f.has_data) {
+      rows.push(`<div class="f-row"><span class="f-label">Швидкість (${f.window_days} дн., ${f.done_moves} задач у DONE):</span><b>${f.velocity_per_week} задач/тиждень</b></div>`);
     }
-    const onTime = ef.projected_date !== null && ef.projected_date <= deadline;
-    return `<div class="forecast-box">
-      <div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${coverage}):</span><b>${ef.backlog_days} дн.</b></div>
-      <div class="f-row"><span class="f-label">Швидкість (${ef.window_days} дн., ${ef.effort_labeled_moves} позначених задач у DONE):</span><b>${ef.velocity_days_per_week} дн./тиждень</b></div>
-      <div class="f-row"><span class="f-label">Прогноз завершення за оцінками:</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(ef.projected_date)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>
-    </div>`;
+    rows.push(`<div class="f-row"><span class="f-label">Залишилось задач (в роботі + нові, без V4):</span><b>${f.remaining}</b></div>`);
+    if (ef && ef.backlog_total > 0) {
+      rows.push(`<div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${ef.backlog_labeled} з ${ef.backlog_total} мають мітку):</span><b>${ef.backlog_days} дн.</b></div>`);
+      rows.push(`<div class="f-row"><span class="f-label">Швидкість за оцінками:</span><b>${ef.has_velocity ? ef.velocity_days_per_week + ' дн./тиждень' : 'недостатньо позначених виконаних задач у історії дій — з\'явиться, коли DONE-задачі накопичать мітки'}</b></div>`);
+    }
+
+    const useEffort = ef && ef.has_velocity;
+    const projectedDate = useEffort ? ef.projected_date : (f.has_data ? f.projected_date : null);
+    const methodNote = useEffort ? ' (за оцінками S/M/L)' : (f.has_data ? ' (за кількістю задач — оцінки ще недостатньо накопичені)' : '');
+    let finishRow;
+    if (projectedDate === null) {
+      finishRow = `<div class="f-row"><span class="f-label">Прогноз завершення:</span><b>${f.remaining === 0 ? 'усі задачі вже виконано' : 'недостатньо історії переміщень у DONE для розрахунку швидкості'}</b></div>`;
+    } else {
+      const onTime = projectedDate <= deadline;
+      finishRow = `<div class="f-row"><span class="f-label">Прогноз завершення${methodNote}:</span><b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(projectedDate)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b></div>`;
+    }
+    rows.push(finishRow);
+
+    return `<div class="forecast-box">${rows.join('')}${reco}</div>`;
   }
 
   function renderProjectsTab(projects) {
@@ -2276,7 +2287,6 @@ if (typeof module !== 'undefined') {
         <div class="project-body">
           ${streamRows}
           ${forecastBoxHtml(p)}
-          ${effortForecastBoxHtml(p)}
           ${blockedHtml}
           ${staleHtml}
         </div>
