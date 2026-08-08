@@ -1539,46 +1539,77 @@ if (typeof module !== 'undefined') {
   const cs = getComputedStyle(root);
   const cvar = (name) => cs.getPropertyValue(name).trim();
 
-  // ================= Persistence: accumulate uploads across sessions (localStorage) =================
+  // ================= Persistence: accumulate uploads across sessions (IndexedDB) =================
   // Reliable only when this page is served from a real origin (GitHub Pages) — under file://,
-  // browsers vary in how they scope localStorage for local files, so accumulation may not
+  // browsers vary in how they scope client storage for local files, so accumulation may not
   // survive a reload there. Each upload MERGES into what's stored (new data wins per key,
   // anything not present in the new file is kept) rather than replacing it, so a narrower
   // re-export (e.g. this month's slice only) adds to history instead of erasing earlier months.
+  //
+  // This used to be localStorage, which caps out at ~5-10MB/origin — comfortable for a few
+  // hundred tasks, but real accumulated history (thousands of tasks, each with a long note) blows
+  // past that. IndexedDB has no such small fixed ceiling (browsers grant a share of free disk,
+  // typically far larger) and stores plain JS objects directly — no JSON.stringify/parse round
+  // trip needed. The trade-off is that every read/write is async, so callers must `await` it.
+  const IDB_NAME = 'exec_dashboard_db';
+  const IDB_STORE = 'kv';
   const LS_KEY_DESIGN = 'exec_dashboard_design_rows_v1';
   const LS_KEY_UX = 'exec_dashboard_ux_rows_v1';
   const LS_KEY_PROJECTS = 'exec_dashboard_projects_v1';
 
-  function lsGet(key) {
-    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
-    catch (e) { console.error('localStorage read failed for', key, e); return null; }
+  let idbPromise = null;
+  function idbOpen() {
+    if (idbPromise) return idbPromise;
+    idbPromise = new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB недоступний у цьому браузері.')); return; }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return idbPromise;
+  }
+  async function idbGet(key) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => reject(req.error);
+    });
   }
   // A failed write here is dangerous precisely because it's invisible otherwise: the render right
-  // after upload reads from the in-memory object, not localStorage, so it looks fine — but the
-  // NEXT upload calls lsGet() and silently continues from the last state that DID persist, which
-  // can be much smaller (e.g. quota exceeded, ~5-10MB/origin, once enough history accumulates).
-  // Callers must check the return value and warn the user instead of trusting a "success" render.
+  // after upload reads from the in-memory object, not the store, so it looks fine — but the NEXT
+  // upload calls idbGet() and silently continues from the last state that DID persist. Callers
+  // must check the return value and warn the user instead of trusting a "success" render.
   let lastStorageError = null;
-  function lsSet(key, value) {
+  async function idbSet(key, value) {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
       lastStorageError = null;
       return true;
     } catch (e) {
-      console.error('localStorage write failed for', key, e);
+      console.error('IndexedDB write failed for', key, e);
       lastStorageError = e.name === 'QuotaExceededError'
-        ? 'Перевищено ліміт збереження браузера (localStorage) — старіші дані лишаються, але цей набір НЕ зберігся й не буде під час наступного відкриття/завантаження.'
+        ? 'Перевищено ліміт збереження браузера — старіші дані лишаються, але цей набір НЕ зберігся й не буде під час наступного відкриття/завантаження.'
         : `Не вдалося зберегти дані в браузері: ${e.message}`;
       return false;
     }
   }
 
-  function loadDesignRows() { return lsGet(LS_KEY_DESIGN) || {}; }
-  function saveDesignRows(rowsById) { return lsSet(LS_KEY_DESIGN, rowsById); }
-  function loadUxRows() { return lsGet(LS_KEY_UX) || {}; }
-  function saveUxRows(rowsByKey) { return lsSet(LS_KEY_UX, rowsByKey); }
-  function loadProjectBoards() { return lsGet(LS_KEY_PROJECTS) || {}; }
-  function saveProjectBoards(boards) { return lsSet(LS_KEY_PROJECTS, boards); }
+  async function loadDesignRows() { return (await idbGet(LS_KEY_DESIGN)) || {}; }
+  async function saveDesignRows(rowsById) { return idbSet(LS_KEY_DESIGN, rowsById); }
+  async function loadUxRows() { return (await idbGet(LS_KEY_UX)) || {}; }
+  async function saveUxRows(rowsByKey) { return idbSet(LS_KEY_UX, rowsByKey); }
+  async function loadProjectBoards() { return (await idbGet(LS_KEY_PROJECTS)) || {}; }
+  async function saveProjectBoards(boards) { return idbSet(LS_KEY_PROJECTS, boards); }
 
   // Merges one freshly-parsed Trello-shaped object (real Trello export, or a CSV/Excel file
   // mapped into the same shape) into the persisted per-board store, keyed by board id so a
@@ -2289,18 +2320,23 @@ if (typeof module !== 'undefined') {
     return items;
   }
 
-  // Initial render: prefer whatever's accumulated in localStorage over the baked-in demo data.
-  // The baked-in DATA/DATA_UX are already-aggregated (not raw rows), so they can't themselves be
+  // Initial render: prefer whatever's accumulated in IndexedDB over the baked-in demo data. The
+  // baked-in DATA/DATA_UX are already-aggregated (not raw rows), so they can't themselves be
   // merged into — the first real upload in a given browser replaces the demo view and becomes
-  // the seed that later uploads accumulate onto from then on.
-  let projectsState = allProjectsFromStore(loadProjectBoards());
-  renderProjectsTab(projectsState);
+  // the seed that later uploads accumulate onto from then on. IndexedDB access is async, so this
+  // whole bootstrap runs inside an IIFE — `projectsState` itself is declared synchronously since
+  // upload handlers and the Excel-export button close over it before this promise settles.
+  let projectsState = [];
+  (async () => {
+    projectsState = allProjectsFromStore(await loadProjectBoards());
+    renderProjectsTab(projectsState);
 
-  const savedDesignRows = loadDesignRows();
-  renderDesignTab(Object.keys(savedDesignRows).length ? aggregateDesign(Object.values(savedDesignRows)) : DATA);
+    const savedDesignRows = await loadDesignRows();
+    renderDesignTab(Object.keys(savedDesignRows).length ? aggregateDesign(Object.values(savedDesignRows)) : DATA);
 
-  const savedUxRows = loadUxRows();
-  renderUXTab(Object.keys(savedUxRows).length ? aggregateUX(Object.values(savedUxRows)) : DATA_UX);
+    const savedUxRows = await loadUxRows();
+    renderUXTab(Object.keys(savedUxRows).length ? aggregateUX(Object.values(savedUxRows)) : DATA_UX);
+  })();
 
   renderInsights('aiInsights', [
     { tag: 'watch', html: `<b>Пік навантаження — березень 2026</b> (700 нових / 669 завершених задач за місяць). З березня по липень обсяг стабільно знижується — варто перевірити, чи це сезонний спад запитів, чи менше кампаній заплановано на літо.` },
@@ -2381,7 +2417,7 @@ if (typeof module !== 'undefined') {
       if (!rows) throw new Error(`У файлі «${file.name}» немає аркуша «Консолидированные данные»`);
       allRecords = allRecords.concat(rowsToRecords(rows));
     }
-    const store = loadDesignRows();
+    const store = await loadDesignRows();
     let added = 0, updated = 0;
     for (const r of allRecords) {
       const id = r['ИД задачи '] ?? r['ИД задачи'];
@@ -2389,7 +2425,7 @@ if (typeof module !== 'undefined') {
       if (Object.prototype.hasOwnProperty.call(store, id)) updated++; else added++;
       store[id] = r;
     }
-    const saved = saveDesignRows(store);
+    const saved = await saveDesignRows(store);
     const data = aggregateDesign(Object.values(store));
     renderDesignTab(data);
     const status = document.getElementById('uploadStatusDesign');
@@ -2411,7 +2447,7 @@ if (typeof module !== 'undefined') {
       if (!rows) throw new Error(`У файлі «${file.name}» немає аркуша «Issue Navigator»`);
       allRecords = allRecords.concat(rowsToRecords(rows));
     }
-    const store = loadUxRows();
+    const store = await loadUxRows();
     let added = 0, updated = 0;
     for (const r of allRecords) {
       const key = r['Key'];
@@ -2419,7 +2455,7 @@ if (typeof module !== 'undefined') {
       if (Object.prototype.hasOwnProperty.call(store, key)) updated++; else added++;
       store[key] = r;
     }
-    const saved = saveUxRows(store);
+    const saved = await saveUxRows(store);
     const data = aggregateUX(Object.values(store));
     renderUXTab(data);
     const status = document.getElementById('uploadStatusUx');
@@ -2463,14 +2499,14 @@ if (typeof module !== 'undefined') {
   }
 
   setupDropzone('dropzoneProjects', 'fileInputProjects', 'uploadStatusProjects', ['.json', '.csv', '.xlsx'], async (files) => {
-    const store = loadProjectBoards();
+    const store = await loadProjectBoards();
     let genericCount = 0;
     for (const file of files) {
       const json = await parseProjectFile(file);
       if (!file.name.toLowerCase().endsWith('.json')) genericCount++;
       mergeBoardIntoStore(store, json);
     }
-    const saved = saveProjectBoards(store);
+    const saved = await saveProjectBoards(store);
     projectsState = allProjectsFromStore(store);
     renderProjectsTab(projectsState);
     const status = document.getElementById('uploadStatusProjects');
