@@ -199,6 +199,11 @@
   .forecast-box .f-row .f-label { flex: 0 0 auto; }
   .forecast-box .f-row b { color: var(--text-primary); }
   .forecast-box .f-reco { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gridline); font-size: 12.5px; color: var(--text-secondary); }
+  .dev-count-input {
+    width: 40px; font: inherit; font-size: 12px; color: var(--text-primary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 4px; text-align: center; margin: 0 2px;
+  }
 
   .export-row { display: flex; gap: 8px; margin-bottom: 16px; }
   .export-btn {
@@ -2117,6 +2122,16 @@ if (typeof module !== 'undefined') {
   const STATUS_LABELS = { green: 'Рух по плану', yellow: 'Є відхилення в терміні реалізації', orange: 'Є відхилення ефекту або бюджету', red: 'Повне блокування реалізації' };
   const fmtDate = (ms) => ms ? new Date(ms).toLocaleDateString('uk-UA') : '—';
 
+  // ef.projected_date already assumes 1 developer (backlog_days calendar days from today);
+  // N developers working in parallel finish the same total estimate in backlog_days/N calendar
+  // days, so this just re-derives the date from ef.backlog_days rather than dividing the date.
+  function effortDateHtml(ef, devCount, deadline) {
+    const days = ef.backlog_days / Math.max(devCount, 1);
+    const date = Date.now() + days * 86400000;
+    const onTime = date <= deadline;
+    return `<b style="color:${onTime ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(date)} · план до ${fmtDate(deadline)} (${onTime ? 'встигаємо' : 'ризик запізнення'})</b>`;
+  }
+
   function progressBarHtml(t, withCaption) {
     const pct = (n) => t.total ? (n / t.total * 100) : 0;
     const pctRound = (n) => t.total ? Math.round(n / t.total * 100) : 0;
@@ -2145,6 +2160,10 @@ if (typeof module !== 'undefined') {
   // number here — not "wait for history" silence. Both sides exclude V4 (lowest priority, not
   // realistically being worked on soon) from "what's left" entirely, per computeForecast /
   // computeEffortForecast already filtering it out at the source.
+  // Per-project "how many developers" — an in-memory what-if knob (not persisted across reloads):
+  // the estimate forecast assumes one person clearing the backlog sequentially, one day of
+  // estimate per calendar day; N developers working in parallel divide that calendar time by N.
+  const devCountByProject = {};
   function forecastBoxHtml(p) {
     const f = p.forecast, ef = p.effort_forecast;
     const deadline = yearEndDeadline(Date.now());
@@ -2159,8 +2178,11 @@ if (typeof module !== 'undefined') {
     if (ef && ef.backlog_total > 0) {
       rows.push(`<div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${ef.backlog_labeled} з ${ef.backlog_total} мають мітку, без V4):</span><b>${ef.backlog_days} дн.</b></div>`);
       if (ef.projected_date !== null) {
-        const onTimeEf = ef.projected_date <= deadline;
-        rows.push(`<div class="f-row"><span class="f-label">Прогноз завершення за оцінками:</span><b style="color:${onTimeEf ? 'var(--status-good)' : 'var(--status-warning)'}">${fmtDate(ef.projected_date)} · план до ${fmtDate(deadline)} (${onTimeEf ? 'встигаємо' : 'ризик запізнення'})</b></div>`);
+        const devCount = devCountByProject[p.id] || 1;
+        const devDateId = `effortDate-${p.id}`;
+        rows.push(`<div class="f-row"><span class="f-label">Прогноз завершення за оцінками, розробників:
+          <input type="number" class="dev-count-input" min="1" step="1" value="${devCount}" id="devCount-${p.id}"></span>
+          <span id="${devDateId}"></span></div>`);
       }
     }
     // Always its own line, driven purely by f.velocity_per_week — recalculates on its own the next
@@ -2277,6 +2299,23 @@ if (typeof module !== 'undefined') {
     listEl.querySelectorAll('.project-head').forEach(head => {
       head.addEventListener('click', () => head.closest('.project-row').classList.toggle('open'));
     });
+
+    const deadline = yearEndDeadline(Date.now());
+    for (const p of projects) {
+      const ef = p.effort_forecast;
+      if (!ef || ef.projected_date === null) continue;
+      const input = document.getElementById(`devCount-${p.id}`);
+      const dateEl = document.getElementById(`effortDate-${p.id}`);
+      if (!input || !dateEl) continue;
+      const update = () => {
+        const n = Math.max(1, parseInt(input.value, 10) || 1);
+        devCountByProject[p.id] = n;
+        dateEl.innerHTML = effortDateHtml(ef, n, deadline);
+      };
+      input.addEventListener('click', e => e.stopPropagation()); // don't collapse the card
+      input.addEventListener('input', update);
+      update();
+    }
 
     renderInsights('aiInsightsProjects', buildProjectInsights(projects));
   }
