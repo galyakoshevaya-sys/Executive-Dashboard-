@@ -2067,6 +2067,71 @@ if (typeof module !== 'undefined') {
     update();
   }
 
+  // Computed fresh from `data` every render — these used to be six hardcoded sentences describing
+  // the original demo dataset, which is why they never changed after a real upload.
+  function buildDesignInsights(data) {
+    const items = [];
+    const months = data.months;
+    let peakMonth = months[0];
+    for (const m of months) if (data.monthly_sum[m] > data.monthly_sum[peakMonth]) peakMonth = m;
+    items.push({ tag: 'watch', html: `<b>Пік навантаження — ${buildMonthLabels([peakMonth])[peakMonth]}</b> (${data.monthly_sum[peakMonth]} задач створено+завершено за місяць).` });
+
+    const overduePct = Math.round(data.meta.overdue_rate * 1000) / 10;
+    items.push({ tag: overduePct < 5 ? 'good' : 'watch', html: `<b>Прострочено:</b> ${overduePct}% задач (${data.meta.overdue_count} з ${data.meta.total_tasks.toLocaleString('uk-UA')}) за весь період.` });
+
+    const byTotal = [...data.designer_table].sort((a, b) => b.total - a.total);
+    const totalAll = byTotal.reduce((s, r) => s + r.total, 0);
+    if (byTotal.length >= 2 && totalAll > 0) {
+      const top2 = byTotal.slice(0, 2);
+      const top2Pct = Math.round((top2[0].total + top2[1].total) / totalAll * 1000) / 10;
+      items.push({ tag: 'watch', html: `<b>Навантаження розподілене нерівномірно:</b> ${top2[0].name} і ${top2[1].name} разом ведуть ${top2Pct}% всього обсягу серед ${byTotal.length} співробітників (${top2[0].total} і ${top2[1].total} задач відповідно).` });
+    }
+
+    const byActive = [...data.designer_table].sort((a, b) => b.active - a.active);
+    if (byActive.length && data.meta.active_now > 0) {
+      const leader = byActive[0];
+      const leaderPct = Math.round(leader.active / data.meta.active_now * 1000) / 10;
+      items.push({ tag: 'watch', html: `<b>Черга зараз найбільша у ${leader.name}</b> — ${leader.active} з ${data.meta.active_now} активних задач (${leaderPct}%)${byActive[1] ? `, наступний за завантаженістю — ${byActive[1].name} (${byActive[1].active})` : ''}.` });
+    }
+
+    const catEntries = Object.entries(data.category_dist).sort((a, b) => b[1] - a[1]);
+    const other = catEntries.find(([k]) => k.startsWith('Інше'));
+    if (other && data.meta.total_tasks > 0) {
+      const pct = Math.round(other[1] / data.meta.total_tasks * 1000) / 10;
+      items.push({ tag: 'idea', html: `<b>«Інше / не визначено»</b> — ${pct}% задач (${other[1]}) без жодного маркера типу роботи ні в назві, ні в нотатках.` });
+    }
+    return items;
+  }
+
+  function buildUxInsights(data) {
+    const items = [];
+    const activeTotal = Object.values(data.active_status_dist).reduce((s, v) => s + v, 0);
+    if (data.meta.total_tasks > 0) {
+      const activePct = Math.round(data.meta.active_now / data.meta.total_tasks * 1000) / 10;
+      const onHold = data.active_status_dist['On Hold'] || 0;
+      const onHoldPct = activeTotal ? Math.round(onHold / activeTotal * 1000) / 10 : 0;
+      items.push({ tag: 'watch', html: `<b>Черга:</b> ${data.meta.active_now} з ${data.meta.total_tasks.toLocaleString('uk-UA')} задач ще активні (${activePct}%)${onHold ? `, ${onHoldPct}% з них (${onHold}) стоять «On Hold»` : ''}.` });
+    }
+    const years = Object.keys(data.by_year).sort();
+    if (years.length >= 2) {
+      const first = years[0], last = years[years.length - 1];
+      const firstVals = Object.values(data.by_year[first].monthly_sum);
+      const lastVals = Object.values(data.by_year[last].monthly_sum);
+      items.push({ tag: 'watch', html: `<b>Обсяг задач по роках:</b> ${first} — від ${Math.min(...firstVals)} до ${Math.max(...firstVals)} задач/міс, ${last} — від ${Math.min(...lastVals)} до ${Math.max(...lastVals)}.` });
+    }
+    const byActive = [...data.designer_table].sort((a, b) => b.active - a.active);
+    if (byActive.length && data.meta.active_now > 0) {
+      const leader = byActive[0];
+      const leaderPct = Math.round(leader.active / data.meta.active_now * 1000) / 10;
+      items.push({ tag: 'watch', html: `<b>Найбільша черга — у ${leader.name}:</b> ${leader.active} з ${data.meta.active_now} активних (${leaderPct}%)${byActive[1] ? `, наступний — ${byActive[1].name} (${byActive[1].active})` : ''}.` });
+    }
+    if (data.meta.total_tasks > 0) {
+      const coveragePct = Math.round(data.meta.avg_hours_n / data.meta.total_tasks * 1000) / 10;
+      items.push({ tag: 'idea', html: `<b>% завантаженості — груба оцінка:</b> реальний Time Spent є лише у ${data.meta.avg_hours_n} з ${data.meta.total_tasks.toLocaleString('uk-UA')} задач (${coveragePct}%), середнє ${data.meta.avg_hours_per_task} год/задачу.` });
+    }
+    return items;
+  }
+
   function renderDesignTab(data) {
     const months = data.months;
     const monthLabels = buildMonthLabels(months);
@@ -2093,6 +2158,7 @@ if (typeof module !== 'undefined') {
       const yd = data.by_year[year];
       renderPeopleGrid('peopleGridAdmins', ADMINS, yd.person_monthly, yd.person_insights, yd.months, buildMonthLabels(yd.months));
     });
+    renderInsights('aiInsights', buildDesignInsights(data));
   }
 
   function renderUXTab(data) {
@@ -2115,6 +2181,7 @@ if (typeof module !== 'undefined') {
       const yd = data.by_year[year];
       renderPeopleGrid('peopleGridUx', UX_PEOPLE, yd.person_monthly, yd.person_insights, yd.months, buildMonthLabels(yd.months));
     });
+    renderInsights('aiInsightsUx', buildUxInsights(data));
   }
 
   // ---------- Успішність проєктів ----------
@@ -2368,22 +2435,9 @@ if (typeof module !== 'undefined') {
     renderUXTab(Object.keys(savedUxRows).length ? aggregateUX(Object.values(savedUxRows)) : DATA_UX);
   })();
 
-  renderInsights('aiInsights', [
-    { tag: 'watch', html: `<b>Пік навантаження — березень 2026</b> (700 нових / 669 завершених задач за місяць). З березня по липень обсяг стабільно знижується — варто перевірити, чи це сезонний спад запитів, чи менше кампаній заплановано на літо.` },
-    { tag: 'good', html: `<b>Дедлайни тримають добре:</b> лише 1.1% задач (38 з 3354) прострочені за весь період — дисципліна виконання висока, це не проблемна зона.` },
-    { tag: 'watch', html: `<b>Навантаження розподілене нерівномірно:</b> Веретенников Сергій і Кошевий Максим разом ведуть 52.9% всього обсягу серед 8 співробітників (1199 і 960 задач відповідно) — решта 6 людей ділять залишок.` },
-    { tag: 'watch', html: `<b>Черга зараз найбільша у Шаптали Оксани</b> — 19 з 62 активних задач (30.6%), майже вдвічі більше за наступного за завантаженістю (Кошевий Максим, 12). Варто перевірити, чи не перерозподілити частину черги.` },
-    { tag: 'idea', html: `<b>«Інше / не визначено» — найбільша «категорія»</b> (19.8%, 665 задач), хоча це не реальний тип роботи: назви на кшталт «Креатив Х» чи «Нічний ЦІНОкач» не містять маркерів типу. Короткий тег при постановці задачі підвищить точність цієї аналітики.` },
-    { tag: 'idea', html: `<b>«Картки товару» як окрема категорія майже не зустрічається</b> (8 задач, 0.2%) — схоже, такі задачі зазвичай оформлюють як «Категорії» чи «Сайт + додаток». Варто підтвердити, чи очікувано це, чи категорію варто об'єднати.` },
-  ]);
-
-  renderInsights('aiInsightsUx', [
-    { tag: 'watch', html: `<b>Черга практично дорівнює виконаному:</b> 112 з 236 задач (47.5%) ще активні, і 42.9% з них (48 задач) стоять «On Hold» — майже половина черги призупинена. Варто перевірити причини паузи й чи є план їх розморозити.` },
-    { tag: 'watch', html: `<b>Обсяг задач різко зріс у 2026:</b> у 2025 було 1–11 задач/міс, у 2026 — вже 9–41 (пік — червень, 41 задача). Це може бути реальне зростання напрямку UX/UI, а може — те, що частину задач 2025 року просто не заносили в Jira системно.` },
-    { tag: 'watch', html: `<b>Найбільша черга — у Кокіна Михайла:</b> 32 з 112 активних (28.6%), майже вдвічі більше за наступного за завантаженістю (Куреня Богдан, 22).` },
-    { tag: 'idea', html: `<b>% завантаженості — груба оцінка:</b> реальний Time Spent є лише у 72 з 236 задач (30.5%), і розкид великий — від 2 до 152 год. Середнє (22.7 год) — це наближення; точність підвищиться, якщо Time Spent проставлятимуть частіше.` },
-    { tag: 'idea', html: `<b>Типу роботи в даних немає:</b> без нього не видно, на що йде основний час команди (дослідження, флоу, прототипування тощо). Якщо з'явиться поле/лейбл або власна класифікація — додам розподіл, як у DESIGN & SUPPORT.` },
-  ]);
+  // aiInsights / aiInsightsUx are now rendered inside renderDesignTab / renderUXTab themselves
+  // (buildDesignInsights / buildUxInsights), computed fresh from `data` every call — these two
+  // are already invoked as part of the initial bootstrap above and every re-upload after it.
 
   // ================= Data upload: parse .xlsx entirely in the browser, no data leaves it =================
 
