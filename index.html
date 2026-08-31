@@ -1045,21 +1045,22 @@ const HOURS_PER_TASK_DESIGN = 2;
 // near-identical banner-placement processes was used — that sub-type genuinely isn't
 // recoverable from the export, but "this is a banner-placement task" vs. "this is an
 // account/attribute/label task" (which differ by 10-40x in duration) reliably is. Each cluster's
-// minutes value is the average of its member catalog rows (catalog row minutes = midpoint of
-// that row's "X-Y хвилин"/"від X до Y годин" range).
+// minutes value is the average of its member catalog rows, where a catalog row's own minutes is
+// the UPPER bound of that row's "X-Y хвилин"/"від X до Y годин" range (e.g. "5-10 хвилин" -> 10)
+// for Сергій/Максим (rows №1-38) — worst-case per process, per explicit request.
 const ADMIN_PROCESS_CLUSTERS_PRIMARY = [
   ['Пошта/лого постачальника', /постачальник/, 2],
   ['Обмеження продажів', /обмежен.*продаж/, 3],
-  ['Логотип бренда', /лого.*бренд|бренд.*лого/, 4.5],
-  ['Промо сторінка', /промо.*сторін/, 4.83],
-  ['Акції', /акці/, 3.67],
-  ['Банери — вимкнення/пріоритети', /вимкнути\s*банер|пріоритет.*банер/, 8.25],
+  ['Логотип бренда', /лого.*бренд|бренд.*лого/, 5],
+  ['Промо сторінка', /промо.*сторін/, 5.33],
+  ['Акції', /акці/, 4.33],
+  ['Банери — вимкнення/пріоритети', /вимкнути\s*банер|пріоритет.*банер/, 10],
   ['Категорії', /категор/, 7.33],
-  ['Магазини', /магазин|назв.*міст/, 5.375],
-  ['Облікові записи/номери', /облік.*запис|заблокувати\s*номер/, 42.5],
-  ['Атрибути', /атрибут/, 38.75],
-  ['Лейбли', /лейб/, 35],
-  ['Банери — розміщення', /банер/, 3.29], // most generic, kept last
+  ['Магазини', /магазин|назв.*міст/, 6],
+  ['Облікові записи/номери', /облік.*запис|заблокувати\s*номер/, 78.75],
+  ['Атрибути', /атрибут/, 65],
+  ['Лейбли', /лейб/, 62.5],
+  ['Банери — розміщення', /банер/, 4], // most generic, kept last
 ];
 // "лендінг"/"цмс блок" cover both a from-scratch multi-day build (the catalog's 8-48 год) and a
 // quick text/date tweak on an already-built one ("Правка лендінгу...", "зміна дати кінця на
@@ -1085,7 +1086,7 @@ const ADMIN_PROCESS_CLUSTERS_TECH = [
 ];
 // Fallback for a task that matches none of the clusters above (median of that role's cluster
 // minutes, not the mean — robust to the 850-1680 min outliers in the TECH set).
-const ADMIN_FALLBACK_MIN_PRIMARY = 5.1;
+const ADMIN_FALLBACK_MIN_PRIMARY = 5.67;
 const ADMIN_FALLBACK_MIN_TECH = 30;
 
 function estimateAdminTaskMinutes(name, note, clusters, fallbackMinutes) {
