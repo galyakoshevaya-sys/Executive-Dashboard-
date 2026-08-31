@@ -914,9 +914,12 @@ function capacityHoursByMonth(months, minDate, maxDate) {
 
 // Per-person insight stats (best/last/prev/delta, optional workload %) for an arbitrary subset
 // of months — shared by the "all time" view and the per-year dropdown views below.
-// `hoursForPerson(name)` returns hours-per-task for that person, or null/undefined to skip the
-// workload_pct_monthly calc for them. `overallMaxDate` is the true last date in the *whole*
-// dataset — only the month that actually contains it is treated as partial/projectable.
+// `hoursForPerson(name)` returns either a flat hours-per-task number (multiplied by that
+// month's task count — designers) or a `{month: totalHours}` object of already-summed real
+// hours (admins, one estimate per actual task — see adminMonthlyHours in aggregateDesign), or
+// null/undefined to skip the workload_pct_monthly calc for them. `overallMaxDate` is the true
+// last date in the *whole* dataset — only the month that actually contains it is treated as
+// partial/projectable.
 function buildPersonInsightsFor(monthsList, personMonthlyAll, peopleList, capacityHours, hoursForPerson, overallMaxDate) {
   const lastMonth = monthsList[monthsList.length - 1];
   const prevMonth = monthsList.length > 1 ? monthsList[monthsList.length - 2] : null;
@@ -949,7 +952,11 @@ function buildPersonInsightsFor(monthsList, personMonthlyAll, peopleList, capaci
     const hrs = hoursForPerson(name);
     if (hrs != null) {
       const pct = {};
-      for (const m of monthsList) pct[m] = Math.round(monthly[m] * hrs / capacityHours[m] * 1000) / 10;
+      if (typeof hrs === 'object') {
+        for (const m of monthsList) pct[m] = Math.round((hrs[m] || 0) / capacityHours[m] * 1000) / 10;
+      } else {
+        for (const m of monthsList) pct[m] = Math.round(monthly[m] * hrs / capacityHours[m] * 1000) / 10;
+      }
       insight.workload_pct_monthly = pct;
     }
     insights[name] = insight;
@@ -1022,22 +1029,71 @@ const DESIGNERS = [
   'Дрижак Ірина Вадимівна',
   'Павліченко Анна Олегівна',
 ];
-const ADMINS = [
-  'Сумцов Кирило Юрійович',
-  'Берднікова Катерина Владиславівна',
-  'Кошевий Максим Русланович',
-  'Веретенников Сергій Миколайович',
-];
+// Технічне адміністрування (Кирило, Катерина) works a different, longer-duration set of
+// processes (CMS-блоки, лендінги, тизери...) than Сергій/Максим's quick catalog admin
+// (банери, категорії, атрибути...) — the timing reference (Копия Таймінги Admin процесів.xlsx,
+// Admin sheet) splits into exactly these two groups: rows №1-38 for Сергій/Максим, and 14
+// unnumbered rows below them for Кирило/Катерина.
+const ADMINS_PRIMARY = ['Кошевий Максим Русланович', 'Веретенников Сергій Миколайович'];
+const ADMINS_TECH = ['Сумцов Кирило Юрійович', 'Берднікова Катерина Владиславівна'];
+const ADMINS = [...ADMINS_TECH, ...ADMINS_PRIMARY];
 const HOURS_PER_TASK_DESIGN = 2;
-// Adminstrators' Planner export has no per-task type field, so there's no way to know which
-// admin process a given task is — unlike designers, we can't classify-then-look-up a time per
-// task. Instead this is a flat per-task average: the mean estimate across all 38 admin process
-// types in the timing reference (Копия Таймінги Admin процесів.xlsx, Admin sheet, № 1-38 —
-// "Розмістити банер...", "Створити категорію...", "Створення облікових записів" etc, each a
-// "X-Y хвилин"/"від X до Y годин" range converted to its midpoint in minutes). Mirrors
-// HOURS_PER_TASK_DESIGN's role: one constant, applied to every admin task, every month, so the
-// workload % chips can be computed the same way as for designers instead of staying blank.
-const HOURS_PER_TASK_ADMIN = 0.21;
+
+// Real per-task time, not a flat average: each admin task is matched against a small set of
+// process clusters built from the timing reference, and the matched cluster's minutes are used
+// for that specific task. Individual catalog rows are grouped into clusters because most real
+// task names ("банери ТВ Xiaomi", "Замінити банери") name the campaign, not which of the ~9
+// near-identical banner-placement processes was used — that sub-type genuinely isn't
+// recoverable from the export, but "this is a banner-placement task" vs. "this is an
+// account/attribute/label task" (which differ by 10-40x in duration) reliably is. Each cluster's
+// minutes value is the average of its member catalog rows (catalog row minutes = midpoint of
+// that row's "X-Y хвилин"/"від X до Y годин" range).
+const ADMIN_PROCESS_CLUSTERS_PRIMARY = [
+  ['Пошта/лого постачальника', /постачальник/, 2],
+  ['Обмеження продажів', /обмежен.*продаж/, 3],
+  ['Логотип бренда', /лого.*бренд|бренд.*лого/, 4.5],
+  ['Промо сторінка', /промо.*сторін/, 4.83],
+  ['Акції', /акці/, 3.67],
+  ['Банери — вимкнення/пріоритети', /вимкнути\s*банер|пріоритет.*банер/, 8.25],
+  ['Категорії', /категор/, 7.33],
+  ['Магазини', /магазин|назв.*міст/, 5.375],
+  ['Облікові записи/номери', /облік.*запис|заблокувати\s*номер/, 42.5],
+  ['Атрибути', /атрибут/, 38.75],
+  ['Лейбли', /лейб/, 35],
+  ['Банери — розміщення', /банер/, 3.29], // most generic, kept last
+];
+// "лендінг"/"цмс блок" cover both a from-scratch multi-day build (the catalog's 8-48 год) and a
+// quick text/date tweak on an already-built one ("Правка лендінгу...", "зміна дати кінця на
+// лендінгу...") — same keyword, very different duration, and the export gives no other signal
+// to tell them apart. An explicit edit-phrase check catches the tweak case before it falls
+// through to the full-build estimate; anything actually describing new construction still does.
+const ADMIN_EDIT_SIGNAL = /прав\w*|змін\w*|додаванн\w*|виправ\w*|замін\w*|поправ\w*/;
+const ADMIN_PROCESS_CLUSTERS_TECH = [
+  ['Банер у Легошопі', /легошоп/, 20],
+  ['Банер у картці товару', /банер.*картц?і?.*товар/, 15],
+  ['Річ картки', /річ.*картк/, 150],
+  ['Сторінка партнерів', /партнер/, 30],
+  ['Тизер', /тизер/, 90],
+  ['CMS сторінка — правки', /(cms|цмс).*сторінк.*прав|прав.*(cms|цмс).*сторінк/, 15],
+  ['CMS сторінка — повна', /(cms|цмс).*сторінк/, 210],
+  ['Лендінг/CMS блок — правки', new RegExp(`(лендінг|цмс\\s*блок|cms\\s*блок).*(${ADMIN_EDIT_SIGNAL.source})|(${ADMIN_EDIT_SIGNAL.source}).*(лендінг|цмс\\s*блок|cms\\s*блок)`), 15],
+  ['CMS блок', /цмс\s*блок|cms\s*блок/, 855],
+  ['Лендінг', /лендінг|landing/, 1680],
+  ['РКТ', /(?<![\p{L}\p{N}_])ркт(?![\p{L}\p{N}_])/u, 105],
+  ['Брендування', /брендуванн/, 22.5],
+  ['JSON іконки', /json.*іконк/, 30],
+  ['Пошук / запити без результатів', /пошук|запит.*результат/, 10], // most generic, kept last
+];
+// Fallback for a task that matches none of the clusters above (median of that role's cluster
+// minutes, not the mean — robust to the 850-1680 min outliers in the TECH set).
+const ADMIN_FALLBACK_MIN_PRIMARY = 5.1;
+const ADMIN_FALLBACK_MIN_TECH = 30;
+
+function estimateAdminTaskMinutes(name, note, clusters, fallbackMinutes) {
+  const t = `${name || ''}\n${note || ''}`.toLowerCase();
+  for (const [, re, minutes] of clusters) if (re.test(t)) return minutes;
+  return fallbackMinutes;
+}
 
 function aggregateDesign(records) {
   // dedup by task ID (in case of multi-file merges in the future)
@@ -1095,9 +1151,25 @@ function aggregateDesign(records) {
   const personMonthly = {};
   for (const name of allPeople) personMonthly[name] = personMonthlyFor(name);
 
+  // Real per-task hours for admins: each task assigned to an admin is matched against their
+  // role's process clusters (see ADMIN_PROCESS_CLUSTERS_*) and its estimated minutes added to
+  // that admin's total for the task's creation month — summed real time, not count * average.
+  const adminMonthlyHours = {};
+  for (const name of ADMINS) { adminMonthlyHours[name] = {}; for (const m of months) adminMonthlyHours[name][m] = 0; }
+  for (const r of rows) {
+    for (const a of r._assignees) {
+      if (!adminMonthlyHours[a]) continue;
+      const isPrimary = ADMINS_PRIMARY.includes(a);
+      const clusters = isPrimary ? ADMIN_PROCESS_CLUSTERS_PRIMARY : ADMIN_PROCESS_CLUSTERS_TECH;
+      const fallback = isPrimary ? ADMIN_FALLBACK_MIN_PRIMARY : ADMIN_FALLBACK_MIN_TECH;
+      const minutes = estimateAdminTaskMinutes(r['Имя задачи'], r['Заметки'], clusters, fallback);
+      adminMonthlyHours[a][monthKey(r._created)] += minutes / 60;
+    }
+  }
+
   function hoursForPersonDesign(name) {
     if (DESIGNERS.includes(name)) return HOURS_PER_TASK_DESIGN;
-    if (ADMINS.includes(name)) return HOURS_PER_TASK_ADMIN;
+    if (adminMonthlyHours[name]) return adminMonthlyHours[name];
     return null;
   }
   const personInsights = buildPersonInsightsFor(months, personMonthly, allPeople, capacityHours, hoursForPersonDesign, maxDate);
@@ -1530,7 +1602,8 @@ if (typeof module !== 'undefined') {
     mondayOf, weekKey, weekRange,
     buildPersonInsightsFor, buildYearlyViews,
     classifyDesignTaskMulti, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
-    HOURS_PER_TASK_DESIGN, HOURS_PER_TASK_ADMIN,
+    ADMINS_PRIMARY, ADMINS_TECH, HOURS_PER_TASK_DESIGN,
+    ADMIN_PROCESS_CLUSTERS_PRIMARY, ADMIN_PROCESS_CLUSTERS_TECH, estimateAdminTaskMinutes,
     classifyStream, aggregateProject, computeForecast, computeEffortForecast, computeProjectStatus, yearEndDeadline,
     isForecastExcluded,
     bucketForListName, isOnHoldListName, isBlockerLabel,
