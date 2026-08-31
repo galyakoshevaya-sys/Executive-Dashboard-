@@ -1029,6 +1029,15 @@ const ADMINS = [
   'Веретенников Сергій Миколайович',
 ];
 const HOURS_PER_TASK_DESIGN = 2;
+// Adminstrators' Planner export has no per-task type field, so there's no way to know which
+// admin process a given task is — unlike designers, we can't classify-then-look-up a time per
+// task. Instead this is a flat per-task average: the mean estimate across all 38 admin process
+// types in the timing reference (Копия Таймінги Admin процесів.xlsx, Admin sheet, № 1-38 —
+// "Розмістити банер...", "Створити категорію...", "Створення облікових записів" etc, each a
+// "X-Y хвилин"/"від X до Y годин" range converted to its midpoint in minutes). Mirrors
+// HOURS_PER_TASK_DESIGN's role: one constant, applied to every admin task, every month, so the
+// workload % chips can be computed the same way as for designers instead of staying blank.
+const HOURS_PER_TASK_ADMIN = 0.21;
 
 function aggregateDesign(records) {
   // dedup by task ID (in case of multi-file merges in the future)
@@ -1086,7 +1095,11 @@ function aggregateDesign(records) {
   const personMonthly = {};
   for (const name of allPeople) personMonthly[name] = personMonthlyFor(name);
 
-  function hoursForPersonDesign(name) { return DESIGNERS.includes(name) ? HOURS_PER_TASK_DESIGN : null; }
+  function hoursForPersonDesign(name) {
+    if (DESIGNERS.includes(name)) return HOURS_PER_TASK_DESIGN;
+    if (ADMINS.includes(name)) return HOURS_PER_TASK_ADMIN;
+    return null;
+  }
   const personInsights = buildPersonInsightsFor(months, personMonthly, allPeople, capacityHours, hoursForPersonDesign, maxDate);
   const currentYear = Math.max(...months.map(m => +m.slice(0, 4)));
   const byYear = buildYearlyViews(months, monthlySum, personMonthly, allPeople, capacityHours, hoursForPersonDesign, maxDate);
@@ -1517,6 +1530,7 @@ if (typeof module !== 'undefined') {
     mondayOf, weekKey, weekRange,
     buildPersonInsightsFor, buildYearlyViews,
     classifyDesignTaskMulti, aggregateDesign, aggregateUX, DESIGNERS, ADMINS, UX_PEOPLE,
+    HOURS_PER_TASK_DESIGN, HOURS_PER_TASK_ADMIN,
     classifyStream, aggregateProject, computeForecast, computeEffortForecast, computeProjectStatus, yearEndDeadline,
     isForecastExcluded,
     bucketForListName, isOnHoldListName, isBlockerLabel,
