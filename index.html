@@ -1089,10 +1089,19 @@ const ADMIN_PROCESS_CLUSTERS_TECH = [
 const ADMIN_FALLBACK_MIN_PRIMARY = 6.54;
 const ADMIN_FALLBACK_MIN_TECH = 30;
 
+// Sums every cluster whose keyword appears in the task's name+note, instead of stopping at the
+// first match — a task can genuinely bundle several processes (banner placement AND landing
+// page, attribute AND label), and per explicit request this sums all of them with no exceptions,
+// even though most multi-matches are just an incidental word in the note rather than a second
+// real task (e.g. "розмістити банер, категорія: Смартфони" mentions a category as the
+// placement's context, not as separate category-management work).
 function estimateAdminTaskMinutes(name, note, clusters, fallbackMinutes) {
   const t = `${name || ''}\n${note || ''}`.toLowerCase();
-  for (const [, re, minutes] of clusters) if (re.test(t)) return minutes;
-  return fallbackMinutes;
+  let total = 0, matched = false;
+  for (const [, re, minutes] of clusters) {
+    if (re.test(t)) { total += minutes; matched = true; }
+  }
+  return matched ? total : fallbackMinutes;
 }
 
 function aggregateDesign(records) {
