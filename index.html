@@ -1089,14 +1089,18 @@ const ADMIN_PROCESS_CLUSTERS_TECH = [
 const ADMIN_FALLBACK_MIN_PRIMARY = 6.54;
 const ADMIN_FALLBACK_MIN_TECH = 30;
 
-// Sums every cluster whose keyword appears in the task's name+note, instead of stopping at the
-// first match — a task can genuinely bundle several processes (banner placement AND landing
-// page, attribute AND label), and per explicit request this sums all of them with no exceptions,
-// even though most multi-matches are just an incidental word in the note rather than a second
-// real task (e.g. "розмістити банер, категорія: Смартфони" mentions a category as the
-// placement's context, not as separate category-management work).
-function estimateAdminTaskMinutes(name, note, clusters, fallbackMinutes) {
+// `sumAll` sums every cluster whose keyword appears in the task's name+note instead of stopping
+// at the first match — a task can genuinely bundle several processes (banner placement AND
+// landing page, attribute AND label). Per explicit request this is on for Сергій/Максим only:
+// for Кирило/Катерина the TECH clusters run 15-1680 min apart, so summing incidental word
+// mentions (most multi-matches are just a category/context mention in the note, not a second
+// real task) blew a real month past 150% — first-match stays safer there.
+function estimateAdminTaskMinutes(name, note, clusters, fallbackMinutes, sumAll) {
   const t = `${name || ''}\n${note || ''}`.toLowerCase();
+  if (!sumAll) {
+    for (const [, re, minutes] of clusters) if (re.test(t)) return minutes;
+    return fallbackMinutes;
+  }
   let total = 0, matched = false;
   for (const [, re, minutes] of clusters) {
     if (re.test(t)) { total += minutes; matched = true; }
@@ -1171,7 +1175,7 @@ function aggregateDesign(records) {
       const isPrimary = ADMINS_PRIMARY.includes(a);
       const clusters = isPrimary ? ADMIN_PROCESS_CLUSTERS_PRIMARY : ADMIN_PROCESS_CLUSTERS_TECH;
       const fallback = isPrimary ? ADMIN_FALLBACK_MIN_PRIMARY : ADMIN_FALLBACK_MIN_TECH;
-      const minutes = estimateAdminTaskMinutes(r['Имя задачи'], r['Заметки'], clusters, fallback);
+      const minutes = estimateAdminTaskMinutes(r['Имя задачи'], r['Заметки'], clusters, fallback, isPrimary);
       adminMonthlyHours[a][monthKey(r._created)] += minutes / 60;
     }
   }
