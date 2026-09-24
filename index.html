@@ -1038,29 +1038,118 @@ const ADMINS_TECH = ['Сумцов Кирило Юрійович', 'Бердні
 const ADMINS = [...ADMINS_TECH, ...ADMINS_PRIMARY];
 const HOURS_PER_TASK_DESIGN = 2;
 
-// Real per-task time, not a flat average: each admin task is matched against a small set of
-// process clusters built from the timing reference, and the matched cluster's minutes are used
-// for that specific task. Individual catalog rows are grouped into clusters because most real
-// task names ("банери ТВ Xiaomi", "Замінити банери") name the campaign, not which of the ~9
-// near-identical banner-placement processes was used — that sub-type genuinely isn't
-// recoverable from the export, but "this is a banner-placement task" vs. "this is an
-// account/attribute/label task" (which differ by 10-40x in duration) reliably is. For Сергій/
-// Максим (rows №1-41), each cluster's minutes is the average of its member catalog rows' own
-// "Середній час" (Таймінги Admin процесів.xlsx, recalculated by the team) — real per-task time
-// built from an average, not the earlier upper-bound version.
+// Real per-task time for Кирило/Катерина: each task is matched against a small set of process
+// clusters built from the timing reference, and the matched cluster's minutes are used for that
+// specific task. Individual catalog rows are grouped into clusters because most real task names
+// ("банери ТВ Xiaomi", "Замінити банери") name the campaign, not which of the ~9 near-identical
+// banner-placement processes was used — that sub-type genuinely isn't recoverable from the
+// export, but "this is a banner-placement task" vs. "this is an account/attribute/label task"
+// (which differ by 10-40x in duration) reliably is.
+//
+// Сергій/Максим (below, ADMIN_PROCESS_CLUSTERS_PRIMARY) get a finer-grained version of the same
+// idea: the team measured actual combined times for common banner-placement combos ("головна +
+// категорія вертикальна + Splash screen" = 9 хв, not the sum of three separate placements) in
+// Таймінги Admin процесів (1).xlsx, 75 rows. A task is matched against detected placement/action
+// flags (home/slider/vertical/landing/catalog/footer/splash/modal/plashka, plus the promo-page
+// action verb) and looked up against the exact combo it matches; entries are ordered from most
+// flags required to fewest so a richer combo wins over any of its own subsets, ending in the
+// plain "банер" catch-all. Flags that never appear together in real free text (no task names
+// placement this specifically) simply never match past the base single-flag/generic rows — that
+// ceiling is inherent to what the export records, not something a bigger table fixes.
+function bannerFlag(re) { return re; }
+const F_HOME = /голов(а|ну|ній|ного)|на\s*головн/;
+const F_SLIDER = /слайдер|горизонтальн/;
+const F_VERTICAL = /вертикальн/;
+const F_LANDING = /посадков/;
+const F_CATALOG = /катал(ог|оз)/;
+const F_FOOTER = /підвал/;
+const F_SPLASH = /splash|спланш/i;
+const F_MODAL = /модалк/;
+const F_PLASHKA = /плашк/;
+const F_ASSEMBLE = /зібра\w*.*промо.*сторін|промо.*сторін.*зібра|створ\w*.*промо.*сторін|промо.*сторін.*створ/;
+const F_UPDATE = /оновл\w*.*промо.*сторін|промо.*сторін.*оновл|оновит\w*.*промо.*сторін|промо.*сторін.*оновит/;
+const F_CLEAN = /чист\w*.*промо.*сторін|промо.*сторін.*чист/;
+const F_AKCIYA = /акці/;
+const F_FORAPP_PROMO = /промо.*сторін.*додат|додат\w*.*промо.*сторін/;
 const ADMIN_PROCESS_CLUSTERS_PRIMARY = [
-  ['Пошта/лого постачальника', /постачальник/, 2],
-  ['Обмеження продажів', /обмежен.*продаж/, 3],
-  ['Логотип бренда', /лого.*бренд|бренд.*лого/, 4.5],
-  ['Промо сторінка', /промо.*сторін/, 9.25],
-  ['Акції', /акці/, 4.67],
-  ['Банери — вимкнення/пріоритети', /вимкнути\s*банер|пріоритет.*банер/, 8.5],
-  ['Категорії', /категор/, 7.33],
-  ['Магазини', /магазин|назв.*міст/, 5.75],
-  ['Облікові записи/номери', /облік.*запис|заблокувати\s*номер|операт\w*.*кц|кц.*операт\w*/, 36],
-  ['Атрибути', /атрибут/, 31.5],
-  ['Лейбли', /лейб/, 27.5],
-  ['Банери — розміщення', /банер/, 3.25], // most generic, kept last
+  // --- banner-placement combos (most flags first), from Таймінги Admin процесів (1).xlsx ---
+  ['Банер: головна+вертикаль+splash+плашка+модалка', [F_HOME, F_VERTICAL, F_SPLASH, F_PLASHKA, F_MODAL], 13],
+  ['Банер: головна+splash+плашка+модалка', [F_HOME, F_SPLASH, F_PLASHKA, F_MODAL], 15],
+  ['Банер: головна+слайдер+посадкова+збір промо', [F_HOME, F_SLIDER, F_LANDING, F_ASSEMBLE], 20],
+  ['Банер: головна+слайдер+каталог+підвал', [F_HOME, F_SLIDER, F_CATALOG, F_FOOTER], 16],
+  ['Банер: слайдер+посадкова+збір промо', [F_SLIDER, F_LANDING, F_ASSEMBLE], 16],
+  ['Банер: вертикаль+посадкова+збір промо', [F_VERTICAL, F_LANDING, F_ASSEMBLE], 13],
+  ['Банер: слайдер+збір промо+акція', [F_SLIDER, F_ASSEMBLE, F_AKCIYA], 18],
+  ['Банер: слайдер+каталог+підвал', [F_SLIDER, F_CATALOG, F_FOOTER], 13],
+  ['Банер: головна+слайдер+вертикаль', [F_HOME, F_SLIDER, F_VERTICAL], 11],
+  ['Банер: головна+вертикаль+каталог', [F_HOME, F_VERTICAL, F_CATALOG], 14],
+  ['Банер: головна+splash+плашка', [F_HOME, F_SPLASH, F_PLASHKA], 11],
+  ['Банер: головна+splash+модалка', [F_HOME, F_SPLASH, F_MODAL], 11],
+  ['Банер: головна+слайдер+збір промо', [F_HOME, F_SLIDER, F_ASSEMBLE], 17],
+  ['Банер: головна+вертикаль+splash', [F_HOME, F_VERTICAL, F_SPLASH], 9],
+  ['Банер: головна+вертикаль+плашка', [F_HOME, F_VERTICAL, F_PLASHKA], 9],
+  ['Банер: головна+вертикаль+модалка', [F_HOME, F_VERTICAL, F_MODAL], 9],
+  ['Банер: головна+вертикаль+збір промо', [F_HOME, F_VERTICAL, F_ASSEMBLE], 15],
+  ['Банер: головна+splash', [F_HOME, F_SPLASH], 7],
+  ['Банер: головна+вертикаль', [F_HOME, F_VERTICAL], 6],
+  ['Банер: головна+збір промо', [F_HOME, F_ASSEMBLE], 11],
+  ['Банер: головна+слайдер', [F_HOME, F_SLIDER], 8],
+  ['Банер: слайдер+збір промо', [F_SLIDER, F_ASSEMBLE], 15],
+  ['Банер: слайдер+посадкова', [F_SLIDER, F_LANDING], 16],
+  ['Банер: слайдер+каталог', [F_SLIDER, F_CATALOG], 10],
+  ['Банер: вертикаль+збір промо', [F_VERTICAL, F_ASSEMBLE], 11],
+  ['Банер: посадкова+збір промо', [F_LANDING, F_ASSEMBLE], 11],
+  ['Банер: слайдер', F_SLIDER, 5],
+  ['Банер: вертикаль', F_VERTICAL, 3],
+  ['Банер: посадкова', F_LANDING, 3],
+  ['Банер: каталог', F_CATALOG, 8],
+  ['Банер: підвал', F_FOOTER, 4],
+  ['Банер: splash', F_SPLASH, 4],
+  ['Банер: модалка', F_MODAL, 4],
+  ['Банер: плашка', F_PLASHKA, 4],
+  ['Промо сторінка для додатку', F_FORAPP_PROMO, 4],
+  ['Банер: вимкнути', /вимкнути\s*банер|банер.*вимкнути/, 4],
+  ['Банер: пріоритети', /пріоритет.*банер|банер.*пріоритет/, 15],
+  ['Банер: головна (базовий)', F_HOME, 3],
+  // --- non-banner processes ---
+  ['Оновити промо + замінити правила акції', [F_UPDATE, /замін\w*.*правил\w*.*акці|правил\w*.*акці.*замін/], 7],
+  ['Промо сторінка: оновити', F_UPDATE, 25],
+  ['Промо сторінка: чистка', F_CLEAN, 6],
+  ['Промо сторінка: зібрати', F_ASSEMBLE, 9],
+  ['Серії в каталозі', /сер(ії|ій|ія).*каталог|каталог.*сер(ії|ій|ія)/, 20],
+  ['Категорія: створити', /створ\w*\s*категор/, 8],
+  ['Категорія: включити', /включ\w*\s*категор|увімкн\w*\s*категор/, 13],
+  ['Категорія: вимкнути', /вимкнути\s*категор/, 6],
+  ['Акція: замінити правила', /замін\w*.*правил\w*.*акці|правил\w*.*акці.*замін/, 5],
+  ['Акція: вимкнути', /вимкнути\s*акці/, 3],
+  ['Акція: змінити опис', /змін\w*.*опис.*акці|опис.*акці.*змін/, 6],
+  ['Акція: розмістити', F_AKCIYA, 7],
+  ['Номер: розблокувати', /розблокувати\s*номер/, 5],
+  ['Номер: заблокувати', /заблокувати\s*номер/, 7],
+  ["Зв'язку операторів КЦ", /зв.?['’]?язк\w*.*операт|операт\w*.*зв.?['’]?язк|операт\w*.*кц|кц.*операт\w*/, 10],
+  ['Обліковий запис: роль', /змін\w*.*рол\w*.*облік|облік.*рол\w*.*змін/, 7],
+  ['Облікові записи: вимкнення', /вимкнен\w*.*облік|облік.*вимкнен/, 80],
+  ['Облікові записи: створення', /облік.*запис/, 100],
+  ["Сімейство/набір атрибутів", /сімейств\w*.*атрибут|набор?[ау].*атрибут|набір.*атрибут/, 60],
+  ['Атрибут: видалити', /видал\w*\s*атрибут/, 7],
+  ['Атрибут: створити', /атрибут/, 10],
+  ['Лейбл: відключити', /відключ\w*.*лейб|вимкн\w*.*лейб/, 7],
+  ['Лейбл: розміщення', /лейб/, 60],
+  ['Фільтр акцій', /фільтр.*акці/, 5],
+  ['Лого Comfy: відключити', /відключ\w*.*лого.*comfy|comfy.*лого.*відключ/i, 3],
+  ['Лого Comfy: розміщення', /лого.*comfy|comfy.*лого/i, 5],
+  ['Обмеження продажів: відключити', /відключ\w*.*обмежен.*продаж|обмежен.*продаж.*відключ/, 4],
+  ['Обмеження продажів: додавання', /обмежен.*продаж/, 4],
+  ['Лого бренда: відключити', /відключ\w*.*лого.*бренд|бренд.*лого.*відключ/, 4],
+  ['Лого бренда: розміщення', /лого.*бренд|бренд.*лого/, 6],
+  ['Лого постачальника: заміна', /замін\w*.*лого.*постачальник/, 5],
+  ['Лого постачальника: додавання', /лого.*постачальник/, 5],
+  ['Пошта постачальника: заміна/видалення', /замін\w*.*пошт\w*.*постачальник|видален\w*.*пошт\w*.*постачальник/, 3],
+  ['Пошта постачальника: додавання', /постачальник/, 3], // most generic, kept last in this group
+  ['Магазин: додавання', /додаванн\w*.*магазин|магазин.*на\s*сайт/, 10],
+  ['Магазин: графік роботи', /графік.*магазин|магазин.*графік/, 5],
+  ['Магазин: пріоритет', /пріоритет.*магазин|магазин.*пріоритет/, 8],
+  ['Назви міст', /назв.*міст/, 9],
 ];
 // "лендінг"/"цмс блок" cover both a from-scratch multi-day build (the catalog's 8-48 год) and a
 // quick text/date tweak on an already-built one ("Правка лендінгу...", "зміна дати кінця на
@@ -1084,9 +1173,9 @@ const ADMIN_PROCESS_CLUSTERS_TECH = [
   ['JSON іконки', /json.*іконк/, 30],
   ['Пошук / запити без результатів', /пошук|запит.*результат/, 10], // most generic, kept last
 ];
-// Fallback for a task that matches none of the clusters above (median of that role's cluster
-// minutes, not the mean — robust to the 850-1680 min outliers in the TECH set).
-const ADMIN_FALLBACK_MIN_PRIMARY = 6.54;
+// Fallback for a task that matches none of the clusters above (median of that role's catalog
+// minutes, not the mean — robust to outliers in both catalogs).
+const ADMIN_FALLBACK_MIN_PRIMARY = 8;
 const ADMIN_FALLBACK_MIN_TECH = 30;
 
 // `sumAll` sums every cluster whose keyword appears in the task's name+note instead of stopping
@@ -1095,15 +1184,21 @@ const ADMIN_FALLBACK_MIN_TECH = 30;
 // for Кирило/Катерина the TECH clusters run 15-1680 min apart, so summing incidental word
 // mentions (most multi-matches are just a category/context mention in the note, not a second
 // real task) blew a real month past 150% — first-match stays safer there.
+// A cluster's middle element is either one regex (must match) or an array of regexes (all must
+// match — used for the Сергій/Максим banner-combo entries, where a task needs every flag of a
+// specific combo present to earn that combo's real measured time).
+function clusterMatches(t, pattern) {
+  return Array.isArray(pattern) ? pattern.every(re => re.test(t)) : pattern.test(t);
+}
 function estimateAdminTaskMinutes(name, note, clusters, fallbackMinutes, sumAll) {
   const t = `${name || ''}\n${note || ''}`.toLowerCase();
   if (!sumAll) {
-    for (const [, re, minutes] of clusters) if (re.test(t)) return minutes;
+    for (const [, pattern, minutes] of clusters) if (clusterMatches(t, pattern)) return minutes;
     return fallbackMinutes;
   }
   let total = 0, matched = false;
-  for (const [, re, minutes] of clusters) {
-    if (re.test(t)) { total += minutes; matched = true; }
+  for (const [, pattern, minutes] of clusters) {
+    if (clusterMatches(t, pattern)) { total += minutes; matched = true; }
   }
   return matched ? total : fallbackMinutes;
 }
@@ -1175,7 +1270,9 @@ function aggregateDesign(records) {
       const isPrimary = ADMINS_PRIMARY.includes(a);
       const clusters = isPrimary ? ADMIN_PROCESS_CLUSTERS_PRIMARY : ADMIN_PROCESS_CLUSTERS_TECH;
       const fallback = isPrimary ? ADMIN_FALLBACK_MIN_PRIMARY : ADMIN_FALLBACK_MIN_TECH;
-      const minutes = estimateAdminTaskMinutes(r['Имя задачи'], r['Заметки'], clusters, fallback, isPrimary);
+      // sumAll is off for both roles now: PRIMARY's combo table already prices multi-process
+      // tasks directly (real measured combo times, not an additive guess); TECH stays first-match.
+      const minutes = estimateAdminTaskMinutes(r['Имя задачи'], r['Заметки'], clusters, fallback, false);
       adminMonthlyHours[a][monthKey(r._created)] += minutes / 60;
     }
   }
