@@ -57,12 +57,21 @@
     --status-good: #0ca30c; --status-warning: #fab219; --status-serious: #ec835a; --status-critical: #e66767;
   }
 
+  /* The theme variables (and so the page background) live on .viz-root, which is only as tall as
+     its content — without these, a short tab leaves the bare white <body> (plus its default 8px
+     margin) showing below and at the edges. Colors mirror --page-plane for light/dark. */
+  html, body { margin: 0; background: #f5f5f5; }
+  @media (prefers-color-scheme: dark) {
+    html:where(:not([data-theme="light"])), html:where(:not([data-theme="light"])) body { background: #101010; }
+  }
+  html[data-theme="dark"], html[data-theme="dark"] body { background: #101010; }
   .viz-root {
     font-family: Montserrat, Arial, -apple-system, sans-serif;
     background: var(--page-plane);
     color: var(--text-primary);
     padding: 24px 20px 60px;
     box-sizing: border-box;
+    min-height: 100vh;
   }
   .viz-root * { box-sizing: border-box; }
   .wrap { max-width: 1220px; margin: 0 auto; }
@@ -224,6 +233,7 @@
     .dropzone, .upload-status, .export-row, .tabs { display: none !important; }
     .project-body { display: block !important; }
     .toggle-arrow, .project-del { display: none !important; }
+    .viz-root { min-height: 0; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     .card, .project-row, .forecast-box { break-inside: avoid; }
   }
