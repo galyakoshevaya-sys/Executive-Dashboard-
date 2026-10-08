@@ -163,6 +163,8 @@
   .project-head .p-bar-wrap { flex: 1 1 220px; min-width: 180px; }
   .project-head .p-stats { display: flex; flex-wrap: nowrap; gap: 14px; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; white-space: nowrap; }
   .project-head .badge-risk { background: rgba(208,59,59,0.15); color: var(--status-critical); border-radius: 5px; padding: 2px 7px; font-weight: 700; font-size: 11.5px; white-space: nowrap; }
+  .project-head .project-del { margin-left: auto; font: inherit; font-size: 11.5px; color: var(--text-muted); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; cursor: pointer; flex-shrink: 0; }
+  .project-head .project-del:hover { color: var(--status-critical); border-color: var(--status-critical); }
   .project-body { display: none; padding: 4px 16px 16px; }
   .project-row.open .project-body { display: block; }
 
@@ -221,7 +223,7 @@
   @media print {
     .dropzone, .upload-status, .export-row, .tabs { display: none !important; }
     .project-body { display: block !important; }
-    .toggle-arrow { display: none !important; }
+    .toggle-arrow, .project-del { display: none !important; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     .card, .project-row, .forecast-box { break-inside: avoid; }
   }
@@ -536,7 +538,7 @@
 
     <div class="dropzone" id="dropzoneProjects">
       <div class="dz-title">📂 Завантажити / оновити проєкти</div>
-      <div class="dz-sub">Перетягніть сюди файл(и) проєкту — JSON (Trello), CSV або Excel — або натисніть, щоб обрати; можна кілька одразу. Кожне завантаження додається до вже накопичених даних (новий файл того ж проєкту оновлює й доповнює його, а не замінює). Trello JSON розпізнається точно (лейбли/списки/історія дій); CSV та Excel — за назвами колонок (Name/Status/Labels тощо) евристично, без прогнозу швидкості (немає історії переміщень) — перевірте результат і напишіть, якщо щось розпізналось не так. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
+      <div class="dz-sub">Перетягніть сюди файл(и) проєкту — JSON (Trello), CSV або Excel — або натисніть, щоб обрати; можна кілька одразу. Кожне завантаження додається до вже накопичених даних (новий файл того ж проєкту оновлює й доповнює його, а не замінює). PIM — Trello JSON (розпізнається точно: лейбли/списки/історія дій). Admin panel — CSV з колонками task_id, title, status, labels… (розпізнається автоматично, кожен новий файл оновлює той самий проєкт). Інші CSV та Excel — за назвами колонок (Name/Status/Labels тощо) евристично, без прогнозу швидкості — перевірте результат і напишіть, якщо щось розпізналось не так. Обробка відбувається у вашому браузері, файли нікуди не надсилаються.</div>
       <input type="file" id="fileInputProjects" accept=".json,.csv,.xlsx" multiple hidden>
     </div>
     <div class="upload-status" id="uploadStatusProjects"></div>
@@ -562,9 +564,9 @@
 
     <div class="card">
       <h2>Проєкти</h2>
-      <p class="card-sub">Клікніть на проєкт, щоб розгорнути розподіл по стрімах, прогноз і рекомендації. Прогрес-бар: виконано / в роботі / нові.</p>
+      <p class="card-sub">Клікніть на проєкт, щоб розгорнути прогрес (для PIM — розподіл по стрімах), прогноз і рекомендації. Прогрес-бар: виконано / в роботі / нові.</p>
       <div id="projectsList"></div>
-      <p class="card-sub" style="margin:12px 0 0">Стрім визначається за лейблом картки: «Категорії» → Категорії, «SEO» → SEO, «MARKETPLACE» → MARKETPLACE, «IN»/«OUT» → Команда вебу, немає жодного з цих лейблів → Управління товарами.</p>
+      <p class="card-sub" id="streamFootnote" style="margin:12px 0 0">Стрім (для PIM) визначається за лейблом картки: «Категорії» → Категорії, «SEO» → SEO, «MARKETPLACE» → MARKETPLACE, «IN»/«OUT» → Команда вебу, немає жодного з цих лейблів → Управління товарами.</p>
     </div>
 
     <div class="card">
@@ -1442,7 +1444,7 @@ function bucketForListName(listName) {
   return 'in_progress';
 }
 function isOnHoldListName(listName) {
-  return /on ?hold|pause|paused|пауз|холд|заморож/i.test(listName || '');
+  return /on ?hold|^\s*hold\s*$|pause|paused|пауз|холд|заморож/i.test(listName || '');
 }
 function isBlockerLabel(labelName) {
   return /block|блок/i.test(labelName || '');
@@ -1461,6 +1463,7 @@ function classifyStream(labelNames) {
 // known stream label falls into "Управління товарами") — both call out as such in the UI.
 // Verify results against a real file and refine once one exists, same as Planner/Jira were.
 function parseCsvText(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // BOM from Excel/Sheets exports would otherwise glue onto the first header
   const rows = [];
   let row = [], field = '', inQuotes = false;
   for (let i = 0; i < text.length; i++) {
@@ -1533,6 +1536,82 @@ function genericRowsToTrelloShape(rows, sourceName) {
   };
 }
 
+// ---- Admin panel project (CSV export from the internal tasks tool) ----
+// A second project "kind" next to the PIM Trello board. It has no streams (one flat backlog), its
+// S/M/L estimates are plain labels like on PIM, and it has no V4 lowest-priority bucket to leave
+// out of the forecast. Task ids (COM1-1, ...) are stable across exports, so every new snapshot
+// updates the same project in place instead of showing up as a new one named after the file.
+const PROJECT_KIND_PIM = 'pim';
+const PROJECT_KIND_ADMIN = 'admin_panel';
+const ADMIN_PANEL_PROJECT_ID = 'admin-panel';
+const ADMIN_PANEL_PROJECT_NAME = 'Admin panel';
+
+// Developers working the backlog in parallel — the default for the "прогноз за оцінками" date.
+// Admin panel has two; PIM keeps its existing default (1, adjustable on the card).
+const DEFAULT_DEVELOPERS_BY_KIND = { [PROJECT_KIND_PIM]: 1, [PROJECT_KIND_ADMIN]: 2 };
+function defaultDevelopers(kind) {
+  return DEFAULT_DEVELOPERS_BY_KIND[kind] || 1;
+}
+
+function normalizeCsvRow(row) {
+  const out = {};
+  for (const [k, v] of Object.entries(row)) out[k.replace(/^﻿/, '').trim().toLowerCase()] = v;
+  return out;
+}
+function isAdminTasksCsv(rows) {
+  if (!rows.length) return false;
+  const headers = Object.keys(normalizeCsvRow(rows[0]));
+  return ['task_id', 'title', 'status'].every(h => headers.includes(h));
+}
+// "Todo"/"Backlog" are the tool's older wording for what is now "NEW" — fold them together so an
+// older snapshot doesn't read as "already in progress".
+function normalizeAdminStatus(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s || /^(todo|to do|backlog)$/i.test(s)) return 'NEW';
+  return s;
+}
+// Maps the flat export onto the Trello-shaped object aggregateProject() already understands.
+// list/label ids are derived from the names (not from their position in this particular file),
+// so cards kept from an earlier snapshot still point at the right list after a later one adds a
+// status. Only what the dashboard needs is kept — descriptions stay out of the persisted store.
+function adminTasksCsvToProjectShape(rawRows) {
+  const rows = rawRows.map(normalizeCsvRow);
+  const listIds = {}, labelIds = {}, cards = [], actions = [];
+  for (const r of rows) {
+    const taskId = String(r.task_id ?? '').trim();
+    if (!taskId) continue;
+    const status = normalizeAdminStatus(r.status);
+    listIds[status] = 'list:' + status;
+    const idLabels = String(r.labels ?? '').split(/[;,]/).map(s => s.trim()).filter(Boolean).map(name => {
+      labelIds[name] = 'label:' + name;
+      return labelIds[name];
+    });
+    cards.push({
+      id: taskId,
+      name: String(r.title ?? '').trim() || taskId,
+      idList: listIds[status],
+      idLabels,
+      closed: false,
+      dateLastActivity: r.updated_at || null,
+    });
+    // Velocity = real "moved to DONE" timestamps. Only tasks that carry a completed_at count, so
+    // the pace is the recent, timestamped one (older bulk-migrated Done tasks have none).
+    if (bucketForListName(status) === 'done' && r.completed_at) {
+      actions.push({ id: 'done:' + taskId, type: 'updateCard', date: r.completed_at, data: { listAfter: { name: 'DONE' } } });
+    }
+  }
+  if (!cards.length) throw new Error('Admin panel: у файлі немає жодної задачі з task_id.');
+  return {
+    id: ADMIN_PANEL_PROJECT_ID,
+    name: ADMIN_PANEL_PROJECT_NAME,
+    kind: PROJECT_KIND_ADMIN,
+    cards,
+    lists: Object.entries(listIds).map(([name, id]) => ({ id, name })),
+    labels: Object.entries(labelIds).map(([name, id]) => ({ id, name })),
+    actions,
+  };
+}
+
 function emptyBucketCounts() {
   return { total: 0, done: 0, in_progress: 0, new: 0, blocked: 0, on_hold: 0 };
 }
@@ -1558,7 +1637,10 @@ function sizeEstimateFor(labelNames) {
 // just left unlabeled — rather than quietly inflating "what's left" with work nobody plans to
 // start.
 const FORECAST_EXCLUDE_LABELS = new Set(['V4']);
-function isForecastExcluded(labelNames) {
+// Admin panel has no lowest-priority bucket to leave out ("V2" there is the second iteration of a
+// feature, still real work), so nothing is excluded from its forecast.
+function isForecastExcluded(labelNames, kind) {
+  if (kind === PROJECT_KIND_ADMIN) return false;
   return labelNames.some(l => FORECAST_EXCLUDE_LABELS.has(l));
 }
 
@@ -1567,13 +1649,13 @@ function isForecastExcluded(labelNames) {
 // estimate-driven date there is: "if the still-open, labeled backlog were worked sequentially
 // starting today, one day of estimate per calendar day, it lands here." Coarser than a real
 // velocity model, but it's available immediately instead of waiting for label history to build up.
-function computeEffortForecast(cards, labelsById, listsById, nowMs) {
+function computeEffortForecast(cards, labelsById, listsById, nowMs, kind) {
   let backlogDays = 0, backlogLabeled = 0, backlogTotal = 0;
   for (const c of cards) {
     const listName = listsById[c.idList] || 'UNKNOWN';
     if (bucketForListName(listName) === 'done') continue;
     const labelNames = (c.idLabels || []).map(id => labelsById[id]).filter(Boolean);
-    if (isForecastExcluded(labelNames)) continue;
+    if (isForecastExcluded(labelNames, kind)) continue;
     backlogTotal++;
     const est = sizeEstimateFor(labelNames);
     if (est != null) { backlogDays += est; backlogLabeled++; }
@@ -1584,6 +1666,8 @@ function computeEffortForecast(cards, labelsById, listsById, nowMs) {
 
 // `nowMs` is injected (not read from Date.now() internally) so this stays testable/deterministic.
 function aggregateProject(trelloJson, nowMs) {
+  const kind = trelloJson.kind === PROJECT_KIND_ADMIN ? PROJECT_KIND_ADMIN : PROJECT_KIND_PIM;
+  const hasStreams = kind === PROJECT_KIND_PIM;
   const labelsById = {};
   for (const l of trelloJson.labels || []) labelsById[l.id] = l.name;
   const listsById = {};
@@ -1599,16 +1683,18 @@ function aggregateProject(trelloJson, nowMs) {
   for (const c of cards) {
     const listName = listsById[c.idList] || 'UNKNOWN';
     const labelNames = (c.idLabels || []).map(id => labelsById[id]).filter(Boolean);
-    const stream = classifyStream(labelNames);
+    const stream = hasStreams ? classifyStream(labelNames) : null;
     const bucket = bucketForListName(listName);
     const isBlocked = labelNames.some(isBlockerLabel);
     const isOnHold = isOnHoldListName(listName);
 
-    if (!streams[stream]) streams[stream] = emptyBucketCounts();
-    streams[stream].total++; streams[stream][bucket]++;
+    if (hasStreams) {
+      if (!streams[stream]) streams[stream] = emptyBucketCounts();
+      streams[stream].total++; streams[stream][bucket]++;
+    }
     totals.total++; totals[bucket]++;
-    if (isBlocked) { streams[stream].blocked++; totals.blocked++; blockedCards.push({ name: c.name, list: listName, stream }); }
-    if (isOnHold) { streams[stream].on_hold++; totals.on_hold++; }
+    if (isBlocked) { if (hasStreams) streams[stream].blocked++; totals.blocked++; blockedCards.push({ name: c.name, list: listName, stream }); }
+    if (isOnHold) { if (hasStreams) streams[stream].on_hold++; totals.on_hold++; }
 
     if (bucket !== 'done' && c.dateLastActivity) {
       const days = (nowMs - new Date(c.dateLastActivity).getTime()) / 86400000;
@@ -1622,16 +1708,25 @@ function aggregateProject(trelloJson, nowMs) {
     const listName = listsById[c.idList] || 'UNKNOWN';
     if (bucketForListName(listName) === 'done') return false;
     const labelNames = (c.idLabels || []).map(id => labelsById[id]).filter(Boolean);
-    return !isForecastExcluded(labelNames);
+    return !isForecastExcluded(labelNames, kind);
   }).length;
   const forecast = computeForecast(trelloJson.actions || [], remainingForForecast, nowMs);
-  const effortForecast = computeEffortForecast(cards, labelsById, listsById, nowMs);
-  const status = computeProjectStatus(activeBlockedCount, forecast, nowMs);
-  const recommendation = buildSpeedRecommendation(streams, forecast);
+  const effortForecast = computeEffortForecast(cards, labelsById, listsById, nowMs, kind);
+  const defaultDevs = defaultDevelopers(kind);
+  // Admin panel's status follows the S/M/L estimate date at its default developer count — its
+  // count-based velocity only covers the few tasks carrying a completed_at, and counts a "L" the
+  // same as an "S", so it would flatter the picture. PIM's status logic is untouched.
+  const status = kind === PROJECT_KIND_ADMIN
+    ? computeProjectStatus(activeBlockedCount, forecast, nowMs, {
+        effortDateMs: effortForecast.projected_date !== null ? nowMs + effortForecast.backlog_days / defaultDevs * 86400000 : null,
+      })
+    : computeProjectStatus(activeBlockedCount, forecast, nowMs);
+  const recommendation = hasStreams ? buildSpeedRecommendation(streams, forecast) : null;
 
   return {
     name: trelloJson.name || 'Без назви',
     id: trelloJson.id || trelloJson.name,
+    kind, default_devs: defaultDevs,
     totals, streams,
     blocked_cards: blockedCards,
     active_blocked_count: activeBlockedCount,
@@ -1685,9 +1780,14 @@ function yearEndDeadline(nowMs) {
 // reserved for when blockers make up a meaningful share of what's left. Otherwise the schedule
 // forecast (vs. the year-end deadline) alone decides on-track vs. slipping.
 const BLOCKED_SHARE_FOR_RED = 0.15;
-function computeProjectStatus(activeBlockedCount, forecast, nowMs) {
+function computeProjectStatus(activeBlockedCount, forecast, nowMs, opts) {
   const remaining = forecast.remaining;
   if (remaining > 0 && (activeBlockedCount / remaining) >= BLOCKED_SHARE_FOR_RED) return 'red';
+  // Estimate-driven projects (Admin panel): a labeled backlog gives the date to judge by; with no
+  // labeled cards at all it falls through to the velocity rules below.
+  if (opts && remaining > 0 && opts.effortDateMs != null) {
+    return opts.effortDateMs > yearEndDeadline(nowMs) ? 'yellow' : 'green';
+  }
   if (forecast.has_data && forecast.projected_date !== null && forecast.projected_date > yearEndDeadline(nowMs)) return 'yellow';
   if (!forecast.has_data && remaining > 0) return 'yellow'; // no velocity signal at all — can't confirm on-track
   return 'green';
@@ -1718,6 +1818,7 @@ if (typeof module !== 'undefined') {
     isForecastExcluded,
     bucketForListName, isOnHoldListName, isBlockerLabel,
     parseCsvText, genericRowsToTrelloShape,
+    isAdminTasksCsv, adminTasksCsvToProjectShape, defaultDevelopers,
   };
 }
 
@@ -1809,6 +1910,7 @@ if (typeof module !== 'undefined') {
     const boardId = json.id || json.name;
     const existing = store[boardId] || { name: json.name, cardsById: {}, labelsById: {}, listsById: {}, actionsById: {} };
     existing.name = json.name || existing.name;
+    if (json.kind) existing.kind = json.kind;
     for (const l of json.labels || []) existing.labelsById[l.id] = l.name;
     for (const l of json.lists || []) existing.listsById[l.id] = l.name;
     for (const c of json.cards || []) existing.cardsById[c.id] = c;
@@ -1820,6 +1922,7 @@ if (typeof module !== 'undefined') {
     return {
       id: boardId,
       name: existing.name,
+      kind: existing.kind,
       cards: Object.values(existing.cardsById),
       labels: Object.entries(existing.labelsById).map(([id, name]) => ({ id, name })),
       lists: Object.entries(existing.listsById).map(([id, name]) => ({ id, name })),
@@ -2454,9 +2557,15 @@ if (typeof module !== 'undefined') {
   // the estimate forecast assumes one person clearing the backlog sequentially, one day of
   // estimate per calendar day; N developers working in parallel divide that calendar time by N.
   const devCountByProject = {};
+  // 1 розробник / 2 розробники / 5 розробників
+  function devWord(n) {
+    return n === 1 ? 'розробник' : (n >= 2 && n <= 4 ? 'розробники' : 'розробників');
+  }
+
   function forecastBoxHtml(p) {
     const f = p.forecast, ef = p.effort_forecast;
     const deadline = yearEndDeadline(Date.now());
+    const isAdmin = p.kind === 'admin_panel';
     const reco = p.recommendation ? `<div class="f-reco">💡 Найбільше ризиків у стрімі «${p.recommendation.stream}» (${p.recommendation.on_hold} на паузі, ${p.recommendation.blocked} з блокером із ${p.recommendation.stream_total} задач у стрімі) — розблокування цих задач найбільше прискорить проєкт.</div>` : '';
 
     const rows = [];
@@ -2466,9 +2575,9 @@ if (typeof module !== 'undefined') {
     const totalRemaining = p.totals.in_progress + p.totals.new;
     rows.push(`<div class="f-row"><span class="f-label">Залишилось задач (в роботі + нові):</span><b>${totalRemaining}</b></div>`);
     if (ef && ef.backlog_total > 0) {
-      rows.push(`<div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${ef.backlog_labeled} з ${ef.backlog_total} мають мітку, без V4):</span><b>${ef.backlog_days} дн.</b></div>`);
+      rows.push(`<div class="f-row"><span class="f-label">Беклог за оцінками S/M/L (${ef.backlog_labeled} з ${ef.backlog_total} мають мітку${isAdmin ? '' : ', без V4'}):</span><b>${ef.backlog_days} дн.</b></div>`);
       if (ef.projected_date !== null) {
-        const devCount = devCountByProject[p.id] || 1;
+        const devCount = devCountByProject[p.id] || p.default_devs || 1;
         const devDateId = `effortDate-${p.id}`;
         rows.push(`<div class="f-row"><span class="f-label">Прогноз завершення за оцінками, розробників:
           <input type="number" class="dev-count-input" min="1" step="1" value="${devCount}" id="devCount-${p.id}"></span>
@@ -2508,13 +2617,20 @@ if (typeof module !== 'undefined') {
       const activeBlocked = p.blocked_cards.filter(c => bucketForListName(c.list) !== 'done');
       for (const c of activeBlocked) {
         const stateLabel = isOnHoldListName(c.list) ? `на паузі (${c.list})` : `у роботі (${c.list})`;
-        alertItems.push({ tag: 'watch', html: `<b>«${c.name}»</b> — проєкт «${p.name}», стрім <b>${c.stream}</b>, ${stateLabel} — <span style="color:var(--status-critical)">причина: мітка-блокер, задача ще не виконана</span>` });
+        const streamPart = c.stream ? `, стрім <b>${c.stream}</b>` : '';
+        alertItems.push({ tag: 'watch', html: `<b>«${c.name}»</b> — проєкт «${p.name}»${streamPart}, ${stateLabel} — <span style="color:var(--status-critical)">причина: мітка-блокер, задача ще не виконана</span>` });
       }
       if (!activeBlocked.length && p.status === 'red') {
         alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: статус «Повне блокування реалізації»</b> — причина: значна частка задач, що лишились, заблокована.` });
       }
       if (p.status === 'yellow') {
-        alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: ризик не встигнути до кінця року</b> — причина: за поточної швидкості (${p.forecast.has_data ? p.forecast.velocity_per_week + ' задач/тиж.' : 'дані відсутні'}) прогноз завершення ${fmtDate(p.forecast.projected_date)}, пізніше за дедлайн 31.12.` });
+        const ef = p.effort_forecast;
+        if (p.kind === 'admin_panel' && ef && ef.projected_date !== null) {
+          const effortDate = Date.now() + ef.backlog_days / p.default_devs * 86400000;
+          alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: ризик не встигнути до кінця року</b> — причина: за оцінками S/M/L (${p.default_devs} ${devWord(p.default_devs)}) прогноз завершення ${fmtDate(effortDate)}, пізніше за дедлайн 31.12.` });
+        } else {
+          alertItems.push({ tag: 'watch', html: `<b>«${p.name}»: ризик не встигнути до кінця року</b> — причина: за поточної швидкості (${p.forecast.has_data ? p.forecast.velocity_per_week + ' задач/тиж.' : 'дані відсутні'}) прогноз завершення ${fmtDate(p.forecast.projected_date)}, пізніше за дедлайн 31.12.` });
+        }
       }
     }
     const alertsEl = document.getElementById('alertsList');
@@ -2525,18 +2641,17 @@ if (typeof module !== 'undefined') {
     }
 
     const listEl = document.getElementById('projectsList');
+    // The stream legend only explains PIM-style (Trello label) streams — hide it when every loaded
+    // project is a flat one like Admin panel.
+    document.getElementById('streamFootnote').style.display = projects.every(p => p.kind === 'admin_panel') ? 'none' : '';
     if (!projects.length) {
       listEl.innerHTML = `<p class="card-sub">Ще не завантажено жодного проєкту — перетягніть Trello-експорт(и) вище.</p>`;
       renderInsights('aiInsightsProjects', []);
       return;
     }
 
-    listEl.innerHTML = projects.map((p, i) => {
-      const activeBlocked = p.blocked_cards.filter(c => bucketForListName(c.list) !== 'done');
-      const streamNames = Object.keys(p.streams).sort((a, b) => STREAM_ORDER.indexOf(a) - STREAM_ORDER.indexOf(b));
-      const streamRows = streamNames.map(name => {
-        const s = p.streams[name];
-        return `
+    // Same row layout for a PIM stream and for Admin panel's single "Прогрес" bar.
+    const bucketRowHtml = (name, s) => `
         <div class="stream-row">
           <div class="s-name">${name}</div>
           <div class="s-bar-wrap">${progressBarHtml(s)}</div>
@@ -2548,17 +2663,25 @@ if (typeof module !== 'undefined') {
             <span>На паузі: <b>${s.on_hold}</b></span>
           </div>
         </div>`;
-      }).join('');
+
+    listEl.innerHTML = projects.map((p, i) => {
+      const activeBlocked = p.blocked_cards.filter(c => bucketForListName(c.list) !== 'done');
+      const streamNames = Object.keys(p.streams).sort((a, b) => STREAM_ORDER.indexOf(a) - STREAM_ORDER.indexOf(b));
+      // Admin panel has no streams: one "Прогрес" bar over the whole backlog instead.
+      const streamRows = p.kind === 'admin_panel'
+        ? bucketRowHtml('Прогрес', p.totals)
+        : streamNames.map(name => bucketRowHtml(name, p.streams[name])).join('');
+      const where = (c) => [c.list, c.stream].filter(Boolean).join(', ');
 
       const staleRelevant = p.stale_cards.filter(c => bucketForListName(c.list) !== 'new' && !isOnHoldListName(c.list));
       const staleHtml = staleRelevant.length ? `
         <p class="card-sub" style="margin-top:14px">Задачі в активній роботі без руху 30+ днів (${staleRelevant.length}):</p>
-        <ul class="stale-list">${staleRelevant.slice(0, 8).map(c => `<li>${c.name} — ${c.list}, ${c.stream}, ${c.days} дн.</li>`).join('')}</ul>
+        <ul class="stale-list">${staleRelevant.slice(0, 8).map(c => `<li>${c.name} — ${where(c)}, ${c.days} дн.</li>`).join('')}</ul>
       ` : '';
 
       const blockedHtml = activeBlocked.length ? `
         <p class="card-sub" style="margin-top:14px">Активні блокери (${activeBlocked.length}):</p>
-        <ul class="stale-list">${activeBlocked.map(c => `<li>${c.name} — ${c.list}, ${c.stream}</li>`).join('')}</ul>
+        <ul class="stale-list">${activeBlocked.map(c => `<li>${c.name} — ${where(c)}</li>`).join('')}</ul>
       ` : '';
 
       return `
@@ -2576,6 +2699,7 @@ if (typeof module !== 'undefined') {
             <span>На паузі: <b>${p.totals.on_hold}</b></span>
           </div>
           ${activeBlocked.length ? `<span class="badge-risk">⚠ ${activeBlocked.length}</span>` : ''}
+          <button class="project-del" data-idx="${i}" title="Прибрати проєкт із дашборду (разом із накопиченими даними в цьому браузері)">Видалити</button>
         </div>
         <div class="project-body">
           ${streamRows}
@@ -2588,6 +2712,22 @@ if (typeof module !== 'undefined') {
 
     listEl.querySelectorAll('.project-head').forEach(head => {
       head.addEventListener('click', () => head.closest('.project-row').classList.toggle('open'));
+    });
+
+    listEl.querySelectorAll('.project-del').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation(); // don't expand/collapse the card
+        const p = projects[+btn.dataset.idx];
+        if (!confirm(`Видалити проєкт «${p.name}» з дашборду?\n\nНакопичені в цьому браузері дані проєкту буде стерто (файл на диску не зачіпається).`)) return;
+        const store = await loadProjectBoards();
+        delete store[p.id];
+        const saved = await saveProjectBoards(store);
+        projectsState = allProjectsFromStore(store);
+        renderProjectsTab(projectsState);
+        const status = document.getElementById('uploadStatusProjects');
+        status.textContent = saved ? `Проєкт «${p.name}» видалено · проєктів у списку: ${projectsState.length}` : `НЕ ЗБЕРЕЖЕНО: ${lastStorageError}`;
+        status.className = saved ? 'upload-status upload-ok' : 'upload-status upload-error';
+      });
     });
 
     const deadline = yearEndDeadline(Date.now());
@@ -2635,6 +2775,15 @@ if (typeof module !== 'undefined') {
       }
       if (p.forecast.has_data) {
         items.push({ tag: p.forecast.projected_date <= yearEndDeadline(Date.now()) ? 'good' : 'watch', html: `<b>«${p.name}»: за поточного темпу (${p.forecast.velocity_per_week} задач/тиж.) прогноз завершення — ${fmtDate(p.forecast.projected_date)}.</b>` });
+      }
+      const ef = p.effort_forecast;
+      if (p.kind === 'admin_panel' && ef && ef.projected_date !== null) {
+        const effortDate = Date.now() + ef.backlog_days / p.default_devs * 86400000;
+        items.push({ tag: effortDate <= yearEndDeadline(Date.now()) ? 'good' : 'watch', html: `<b>«${p.name}»: за оцінками S/M/L (${p.default_devs} ${devWord(p.default_devs)}) прогноз завершення — ${fmtDate(effortDate)}.</b> Беклог — ${ef.backlog_days} дн. роботи.` });
+        const unlabeled = ef.backlog_total - ef.backlog_labeled;
+        if (unlabeled > 0) {
+          items.push({ tag: 'idea', html: `<b>«${p.name}»: ${unlabeled} з ${ef.backlog_total} незавершених задач без оцінки S/M/L</b> — вони не входять у прогноз за оцінками, тож реальна дата може бути пізнішою.` });
+        }
       }
     }
     return items;
@@ -2792,7 +2941,9 @@ if (typeof module !== 'undefined') {
     }
     if (lower.endsWith('.csv')) {
       const text = await file.text();
-      return genericRowsToTrelloShape(parseCsvText(text), baseName);
+      const rows = parseCsvText(text);
+      if (isAdminTasksCsv(rows)) return adminTasksCsvToProjectShape(rows);
+      return genericRowsToTrelloShape(rows, baseName);
     }
     if (lower.endsWith('.xlsx')) {
       if (!checkBrowserSupport()) throw new Error('Браузер не підтримує розбір .xlsx.');
@@ -2810,7 +2961,7 @@ if (typeof module !== 'undefined') {
     let genericCount = 0;
     for (const file of files) {
       const json = await parseProjectFile(file);
-      if (!file.name.toLowerCase().endsWith('.json')) genericCount++;
+      if (!file.name.toLowerCase().endsWith('.json') && json.kind !== 'admin_panel') genericCount++;
       mergeBoardIntoStore(store, json);
     }
     const saved = await saveProjectBoards(store);
